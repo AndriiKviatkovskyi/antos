@@ -1,0 +1,53 @@
+version: "3.9"
+
+services:
+  frontend:
+    container_name: antos-frontend
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    depends_on:
+      - backend
+
+  backend:
+    container_name: antos-backend
+    build: ./backend
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - db
+
+  db:
+    container_name: antos-db
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: antos
+      POSTGRES_PASSWORD: antos
+      POSTGRES_DB: antos
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # aptos:
+  #   container_name: antos-aptos
+  #   image: aptoslabs/aptos-core:latest
+  #   command: tail -f /dev/null
+  #   volumes:
+  #     - ./move:/move
+  #   working_dir: /move
+  #   ports:
+  #     - "8080:8080"
+
+volumes:
+  postgres_data:

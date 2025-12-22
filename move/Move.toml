@@ -4,6 +4,7 @@ version = "1.0.0"
 authors = ["Andrii Kviatkovskyi"]
 
 [addresses]
+multisig_addr = "0x7dad8fab057bc3b3a961db831225b7d2b0daf9a85eeb8b6e0cc00b99f831b79b"
 
 [dev-addresses]
 

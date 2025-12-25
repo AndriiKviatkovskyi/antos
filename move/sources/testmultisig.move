@@ -14,14 +14,23 @@ module multisig_addr::simple_multisig {
     const EPROPOSAL_NOT_FOUND: u64 = 7;
     const EINSUFFICIENT_FUNDS: u64 = 8;
     const EALREADY_ADMIN: u64 = 9;
+    const ENOT_AUTHORIZED: u64 = 10;
+
+    /// Voting Modes
+    const MODE_MAJORITY: u8 = 1; 
+    const MODE_TWO_THIRDS: u8 = 2; 
+    const MODE_UNANIMOUS: u8 = 3; 
 
     struct MultisigStore has key {
         owners: vector<address>,
-        admins: vector<address>, 
+        admins: vector<address>,
         max_owners: u64,
         proposals: vector<Proposal>,
         next_proposal_id: u64,
         signer_cap: SignerCapability,
+        only_admins_can_initiate: bool,
+        only_admins_can_vote: bool,
+        voting_mode: u8,
     }
 
     struct Proposal has store, copy, drop {
@@ -33,14 +42,13 @@ module multisig_addr::simple_multisig {
         is_executed: bool,
     }
 
-    /// Fixed struct abilities
     struct WalletInfo has drop, copy {
         owners: vector<address>,
         admins: vector<address>,
-        max_owners: u64,
         balance: u64,
-        next_proposal_id: u64,
-        total_proposals: u64
+        only_admins_can_initiate: bool,
+        only_admins_can_vote: bool,
+        voting_mode: u8
     }
 
     public entry fun initialize(admin: &signer, max_owners: u64) {
@@ -54,7 +62,24 @@ module multisig_addr::simple_multisig {
             proposals: vector::empty<Proposal>(),
             next_proposal_id: 0,
             signer_cap: resource_cap,
+            only_admins_can_initiate: false,
+            only_admins_can_vote: false,
+            voting_mode: MODE_MAJORITY,
         });
+    }
+
+    public entry fun update_governance_configs(
+        admin: &signer,
+        multisig_address: address,
+        only_admins_can_initiate: bool,
+        only_admins_can_vote: bool,
+        voting_mode: u8
+    ) acquires MultisigStore {
+        let store = borrow_global_mut<MultisigStore>(multisig_address);
+        assert!(vector::contains(&store.admins, &signer::address_of(admin)), ENOT_ADMIN);
+        store.only_admins_can_initiate = only_admins_can_initiate;
+        store.only_admins_can_vote = only_admins_can_vote;
+        store.voting_mode = voting_mode;
     }
 
     public entry fun add_owner(
@@ -65,28 +90,14 @@ module multisig_addr::simple_multisig {
     ) acquires MultisigStore {
         let store = borrow_global_mut<MultisigStore>(multisig_address);
         assert!(vector::contains(&store.admins, &signer::address_of(admin)), ENOT_ADMIN);
-        assert!(vector::length(&store.owners) < store.max_owners, EMAX_OWNERS_REACHED);
         
         if (!vector::contains(&store.owners, &new_owner)) {
+            assert!(vector::length(&store.owners) < store.max_owners, EMAX_OWNERS_REACHED);
             vector::push_back(&mut store.owners, new_owner);
         };
-
         if (make_admin && !vector::contains(&store.admins, &new_owner)) {
             vector::push_back(&mut store.admins, new_owner);
         };
-    }
-
-    public entry fun promote_to_admin(
-        admin: &signer, 
-        multisig_address: address, 
-        target_owner: address
-    ) acquires MultisigStore {
-        let store = borrow_global_mut<MultisigStore>(multisig_address);
-        assert!(vector::contains(&store.admins, &signer::address_of(admin)), ENOT_ADMIN);
-        assert!(vector::contains(&store.owners, &target_owner), ENOT_OWNER);
-        assert!(!vector::contains(&store.admins, &target_owner), EALREADY_ADMIN);
-
-        vector::push_back(&mut store.admins, target_owner);
     }
 
     public entry fun propose_transfer(
@@ -97,14 +108,19 @@ module multisig_addr::simple_multisig {
     ) acquires MultisigStore {
         let creator_addr = signer::address_of(creator);
         let store = borrow_global_mut<MultisigStore>(multisig_address);
-        assert!(vector::contains(&store.owners, &creator_addr), ENOT_OWNER);
+        
+        if (store.only_admins_can_initiate) {
+            assert!(vector::contains(&store.admins, &creator_addr), ENOT_AUTHORIZED);
+        } else {
+            assert!(vector::contains(&store.owners, &creator_addr), ENOT_OWNER);
+        };
 
         let new_proposal = Proposal {
             id: store.next_proposal_id,
             creator: creator_addr,
             recipient,
             amount,
-            approvals: vector[creator_addr],
+            approvals: vector::empty<address>(), // Start empty to avoid creator double-approving
             is_executed: false,
         };
 
@@ -115,7 +131,12 @@ module multisig_addr::simple_multisig {
     public entry fun approve(approver: &signer, multisig_address: address, proposal_id: u64) acquires MultisigStore {
         let approver_addr = signer::address_of(approver);
         let store = borrow_global_mut<MultisigStore>(multisig_address);
-        assert!(vector::contains(&store.owners, &approver_addr), ENOT_OWNER);
+        
+        if (store.only_admins_can_vote) {
+            assert!(vector::contains(&store.admins, &approver_addr), ENOT_AUTHORIZED);
+        } else {
+            assert!(vector::contains(&store.owners, &approver_addr), ENOT_OWNER);
+        };
 
         let i = 0;
         let len = vector::length(&store.proposals);
@@ -124,10 +145,27 @@ module multisig_addr::simple_multisig {
             if (proposal.id == proposal_id) {
                 assert!(!proposal.is_executed, EPROPOSAL_ALREADY_EXECUTED);
                 assert!(!vector::contains(&proposal.approvals, &approver_addr), EALREADY_APPROVED);
+                
                 vector::push_back(&mut proposal.approvals, approver_addr);
                 
-                let threshold = (vector::length(&store.owners) / 2) + 1;
-                if (vector::length(&proposal.approvals) >= threshold) {
+                let total_voters = if (store.only_admins_can_vote) {
+                    vector::length(&store.admins)
+                } else {
+                    vector::length(&store.owners)
+                };
+
+                let num_approvals = vector::length(&proposal.approvals);
+                let threshold_met = false;
+
+                if (store.voting_mode == MODE_MAJORITY) {
+                    threshold_met = num_approvals >= (total_voters / 2 + 1);
+                } else if (store.voting_mode == MODE_TWO_THIRDS) {
+                    threshold_met = (3 * num_approvals) >= (2 * total_voters);
+                } else if (store.voting_mode == MODE_UNANIMOUS) {
+                    threshold_met = num_approvals == total_voters;
+                };
+
+                if (threshold_met) {
                     let treasury_signer = account::create_signer_with_capability(&store.signer_cap);
                     coin::transfer<AptosCoin>(&treasury_signer, proposal.recipient, proposal.amount);
                     proposal.is_executed = true;
@@ -145,64 +183,60 @@ module multisig_addr::simple_multisig {
         WalletInfo {
             owners: store.owners,
             admins: store.admins,
-            max_owners: store.max_owners,
             balance: coin::balance<AptosCoin>(multisig_address),
-            next_proposal_id: store.next_proposal_id,
-            total_proposals: vector::length(&store.proposals)
+            only_admins_can_initiate: store.only_admins_can_initiate,
+            only_admins_can_vote: store.only_admins_can_vote,
+            voting_mode: store.voting_mode
         }
     }
 
-    // --- TEST SECTION ---
-    
     #[test_only]
     use aptos_framework::aptos_coin;
 
-    #[test_only]
-    use std::debug;
-
-    #[test(admin = @0x44, o1 = @0x11, o2 = @0x22, rec = @0x33, framework = @0x1)]
-    fun test_full_multisig_flow(
-        admin: signer, o1: signer, o2: signer, rec: signer, framework: signer
+    #[test(admin = @multisig_addr, o1 = @0x11, o2 = @0x22, o3 = @0x33, framework = @0x1)]
+    fun test_complex_governance(
+        admin: signer, o1: signer, o2: signer, o3: signer, framework: signer
     ) acquires MultisigStore {
         let admin_addr = signer::address_of(&admin);
-        let rec_addr = signer::address_of(&rec);
         let (burn, mint) = aptos_coin::initialize_for_test(&framework);
         
         account::create_account_for_test(admin_addr);
-        account::create_account_for_test(rec_addr);
         account::create_account_for_test(@0x11);
         account::create_account_for_test(@0x22);
+        account::create_account_for_test(@0x33);
 
-        // 1. Initialize
         initialize(&admin, 10);
-        let resource_addr = account::create_resource_address(&admin_addr, b"TREASURY_V1");
-        account::create_account_for_test(resource_addr);
+        let res_addr = account::create_resource_address(&admin_addr, b"TREASURY_V1");
+        account::create_account_for_test(res_addr);
 
-        // 2. Test Multi-Admin Logic
-        add_owner(&admin, resource_addr, @0x11, false); // O1 is owner
-        add_owner(&admin, resource_addr, @0x22, true);  // O2 is admin
+        add_owner(&admin, res_addr, @0x11, true); 
+        add_owner(&admin, res_addr, @0x22, false);
+        add_owner(&admin, res_addr, @0x33, false);
 
-        // O2 (new admin) promotes O1 to admin
-        promote_to_admin(&o2, resource_addr, @0x11);
-
-        // 3. Verify Wallet Info View
-        let info = get_wallet_info(resource_addr);
-        assert!(vector::length(&info.admins) == 3, 100);
-        assert!(vector::length(&info.owners) == 3, 101);
-
-        // 4. Fund and Transact
-        let coins = coin::mint<AptosCoin>(1000, &mint);
-        coin::deposit(resource_addr, coins);
-
-        propose_transfer(&o1, resource_addr, rec_addr, 600);
-        approve(&o2, resource_addr, 0);
-
-        // 5. Final Verification
-        assert!(coin::balance<AptosCoin>(rec_addr) == 600, 1);
-
-        let info = get_wallet_info(resource_addr);
-        debug::print(&info);
+        // --- TEST 1: Unanimous Admins Only ---
+        // Voters: Admin, O1 (Total 2). Mode: Unanimous.
+        update_governance_configs(&admin, res_addr, false, true, MODE_UNANIMOUS);
         
+        let coins = coin::mint<AptosCoin>(1000, &mint);
+        coin::deposit(res_addr, coins);
+
+        propose_transfer(&o2, res_addr, @0x44, 100); 
+        approve(&admin, res_addr, 0);
+        assert!(coin::balance<AptosCoin>(@0x44) == 0, 1); // Not executed yet
+        approve(&o1, res_addr, 0);
+        assert!(coin::balance<AptosCoin>(@0x44) == 100, 2); // Executed
+
+        // --- TEST 2: 2/3 Owners ---
+        // Voters: Admin, O1, O2, O3 (Total 4). 3*num >= 2*4(8) -> Needs 3 votes.
+        update_governance_configs(&admin, res_addr, false, false, MODE_TWO_THIRDS);
+        
+        propose_transfer(&o3, res_addr, @0x55, 100);
+        approve(&admin, res_addr, 1);
+        approve(&o1, res_addr, 1);
+        assert!(coin::balance<AptosCoin>(@0x55) == 0, 3); // 2/4 is not 2/3
+        approve(&o2, res_addr, 1);
+        assert!(coin::balance<AptosCoin>(@0x55) == 100, 4); // 3/4 is 2/3
+
         coin::destroy_burn_cap(burn);
         coin::destroy_mint_cap(mint);
     }

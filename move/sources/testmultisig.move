@@ -13,13 +13,14 @@ module multisig_addr::simple_multisig {
     const ENOT_ADMIN: u64 = 6;
     const EPROPOSAL_NOT_FOUND: u64 = 7;
     const EINSUFFICIENT_FUNDS: u64 = 8;
-    const EALREADY_ADMIN: u64 = 9;
     const ENOT_AUTHORIZED: u64 = 10;
+    const EINVALID_THRESHOLDS: u64 = 11;
 
     /// Voting Modes
     const MODE_MAJORITY: u8 = 1; 
     const MODE_TWO_THIRDS: u8 = 2; 
     const MODE_UNANIMOUS: u8 = 3; 
+    const MODE_COMBINED: u8 = 4;
 
     struct MultisigStore has key {
         owners: vector<address>,
@@ -31,6 +32,9 @@ module multisig_addr::simple_multisig {
         only_admins_can_initiate: bool,
         only_admins_can_vote: bool,
         voting_mode: u8,
+        // Combined mode thresholds
+        tier_two_threshold: u64,   // x: Start using 2/3 here
+        tier_three_threshold: u64, // y: Start using Unanimous here
     }
 
     struct Proposal has store, copy, drop {
@@ -46,9 +50,9 @@ module multisig_addr::simple_multisig {
         owners: vector<address>,
         admins: vector<address>,
         balance: u64,
-        only_admins_can_initiate: bool,
-        only_admins_can_vote: bool,
-        voting_mode: u8
+        voting_mode: u8,
+        tier_two_threshold: u64,
+        tier_three_threshold: u64
     }
 
     public entry fun initialize(admin: &signer, max_owners: u64) {
@@ -65,6 +69,8 @@ module multisig_addr::simple_multisig {
             only_admins_can_initiate: false,
             only_admins_can_vote: false,
             voting_mode: MODE_MAJORITY,
+            tier_two_threshold: 0,
+            tier_three_threshold: 0,
         });
     }
 
@@ -73,13 +79,22 @@ module multisig_addr::simple_multisig {
         multisig_address: address,
         only_admins_can_initiate: bool,
         only_admins_can_vote: bool,
-        voting_mode: u8
+        voting_mode: u8,
+        tier_two: u64,
+        tier_three: u64
     ) acquires MultisigStore {
         let store = borrow_global_mut<MultisigStore>(multisig_address);
         assert!(vector::contains(&store.admins, &signer::address_of(admin)), ENOT_ADMIN);
+        
+        if (voting_mode == MODE_COMBINED) {
+            assert!(tier_three > tier_two, EINVALID_THRESHOLDS);
+        };
+
         store.only_admins_can_initiate = only_admins_can_initiate;
         store.only_admins_can_vote = only_admins_can_vote;
         store.voting_mode = voting_mode;
+        store.tier_two_threshold = tier_two;
+        store.tier_three_threshold = tier_three;
     }
 
     public entry fun add_owner(
@@ -120,7 +135,7 @@ module multisig_addr::simple_multisig {
             creator: creator_addr,
             recipient,
             amount,
-            approvals: vector::empty<address>(), // Start empty to avoid creator double-approving
+            approvals: vector::empty<address>(),
             is_executed: false,
         };
 
@@ -154,14 +169,26 @@ module multisig_addr::simple_multisig {
                     vector::length(&store.owners)
                 };
 
+                // Determine active mode for this specific proposal
+                let active_mode = store.voting_mode;
+                if (active_mode == MODE_COMBINED) {
+                    if (proposal.amount < store.tier_two_threshold) {
+                        active_mode = MODE_MAJORITY;
+                    } else if (proposal.amount < store.tier_three_threshold) {
+                        active_mode = MODE_TWO_THIRDS;
+                    } else {
+                        active_mode = MODE_UNANIMOUS;
+                    };
+                };
+
                 let num_approvals = vector::length(&proposal.approvals);
                 let threshold_met = false;
 
-                if (store.voting_mode == MODE_MAJORITY) {
+                if (active_mode == MODE_MAJORITY) {
                     threshold_met = num_approvals >= (total_voters / 2 + 1);
-                } else if (store.voting_mode == MODE_TWO_THIRDS) {
+                } else if (active_mode == MODE_TWO_THIRDS) {
                     threshold_met = (3 * num_approvals) >= (2 * total_voters);
-                } else if (store.voting_mode == MODE_UNANIMOUS) {
+                } else if (active_mode == MODE_UNANIMOUS) {
                     threshold_met = num_approvals == total_voters;
                 };
 
@@ -184,22 +211,23 @@ module multisig_addr::simple_multisig {
             owners: store.owners,
             admins: store.admins,
             balance: coin::balance<AptosCoin>(multisig_address),
-            only_admins_can_initiate: store.only_admins_can_initiate,
-            only_admins_can_vote: store.only_admins_can_vote,
-            voting_mode: store.voting_mode
+            voting_mode: store.voting_mode,
+            tier_two_threshold: store.tier_two_threshold,
+            tier_three_threshold: store.tier_three_threshold,
         }
     }
 
+    // --- EXPANDED TEST SECTION ---
+    
     #[test_only]
     use aptos_framework::aptos_coin;
 
     #[test(admin = @multisig_addr, o1 = @0x11, o2 = @0x22, o3 = @0x33, framework = @0x1)]
-    fun test_complex_governance(
+    fun test_combined_governance(
         admin: signer, o1: signer, o2: signer, o3: signer, framework: signer
     ) acquires MultisigStore {
         let admin_addr = signer::address_of(&admin);
         let (burn, mint) = aptos_coin::initialize_for_test(&framework);
-        
         account::create_account_for_test(admin_addr);
         account::create_account_for_test(@0x11);
         account::create_account_for_test(@0x22);
@@ -209,33 +237,36 @@ module multisig_addr::simple_multisig {
         let res_addr = account::create_resource_address(&admin_addr, b"TREASURY_V1");
         account::create_account_for_test(res_addr);
 
-        add_owner(&admin, res_addr, @0x11, true); 
+        // Setup 4 owners (Admin, O1, O2, O3)
+        add_owner(&admin, res_addr, @0x11, false); 
         add_owner(&admin, res_addr, @0x22, false);
         add_owner(&admin, res_addr, @0x33, false);
 
-        // --- TEST 1: Unanimous Admins Only ---
-        // Voters: Admin, O1 (Total 2). Mode: Unanimous.
-        update_governance_configs(&admin, res_addr, false, true, MODE_UNANIMOUS);
+        // Combined Mode: 
+        // < 100: Majority (3/4 = 3)
+        // 100-499: 2/3 (3/4 = 3)
+        // >= 500: Unanimous (4/4 = 4)
+        update_governance_configs(&admin, res_addr, false, false, MODE_COMBINED, 100, 500);
         
-        let coins = coin::mint<AptosCoin>(1000, &mint);
+        let coins = coin::mint<AptosCoin>(2000, &mint);
         coin::deposit(res_addr, coins);
 
-        propose_transfer(&o2, res_addr, @0x44, 100); 
+        // TIER 1: Majority check (Amount 50)
+        propose_transfer(&o1, res_addr, @0x44, 50);
         approve(&admin, res_addr, 0);
-        assert!(coin::balance<AptosCoin>(@0x44) == 0, 1); // Not executed yet
         approve(&o1, res_addr, 0);
-        assert!(coin::balance<AptosCoin>(@0x44) == 100, 2); // Executed
+        assert!(coin::balance<AptosCoin>(@0x44) == 0, 1); // 2/4 not enough for majority
+        approve(&o2, res_addr, 0);
+        assert!(coin::balance<AptosCoin>(@0x44) == 50, 2); // 3/4 passed
 
-        // --- TEST 2: 2/3 Owners ---
-        // Voters: Admin, O1, O2, O3 (Total 4). 3*num >= 2*4(8) -> Needs 3 votes.
-        update_governance_configs(&admin, res_addr, false, false, MODE_TWO_THIRDS);
-        
-        propose_transfer(&o3, res_addr, @0x55, 100);
+        // TIER 3: Unanimous check (Amount 600)
+        propose_transfer(&o1, res_addr, @0x55, 600);
         approve(&admin, res_addr, 1);
         approve(&o1, res_addr, 1);
-        assert!(coin::balance<AptosCoin>(@0x55) == 0, 3); // 2/4 is not 2/3
         approve(&o2, res_addr, 1);
-        assert!(coin::balance<AptosCoin>(@0x55) == 100, 4); // 3/4 is 2/3
+        assert!(coin::balance<AptosCoin>(@0x55) == 0, 3); // 3/4 not enough for unanimous
+        approve(&o3, res_addr, 1);
+        assert!(coin::balance<AptosCoin>(@0x55) == 600, 4); // 4/4 passed
 
         coin::destroy_burn_cap(burn);
         coin::destroy_mint_cap(mint);

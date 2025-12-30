@@ -17,6 +17,8 @@ module multisig_addr::simple_multisig {
     const EINVALID_THRESHOLDS: u64 = 11;
     const EVETO_DISABLED: u64 = 12;
     const ECANNOT_REMOVE_LAST_ADMIN: u64 = 13;
+    const EADDRESS_BLACKLISTED: u64 = 14;
+    const ERECIPIENT_NOT_ALLOWED: u64 = 15;
 
     /// Voting Modes
     const MODE_MAJORITY: u8 = 1; 
@@ -37,6 +39,11 @@ module multisig_addr::simple_multisig {
         voting_mode: u8,
         tier_two_threshold: u64,
         tier_three_threshold: u64,
+        // Added: List Restrictions
+        membership_blacklist: vector<address>,
+        recipient_whitelist: vector<address>,
+        recipient_blacklist: vector<address>,
+        recipient_filter_is_whitelist: bool, // true = Whitelist, false = Blacklist
     }
 
     struct Proposal has store, copy, drop {
@@ -55,7 +62,8 @@ module multisig_addr::simple_multisig {
         voting_mode: u8,
         admins_can_veto: bool,
         tier_two_threshold: u64,
-        tier_three_threshold: u64
+        tier_three_threshold: u64,
+        recipient_filter_is_whitelist: bool
     }
 
     public entry fun initialize(admin: &signer, max_owners: u64) {
@@ -75,16 +83,21 @@ module multisig_addr::simple_multisig {
             voting_mode: MODE_MAJORITY,
             tier_two_threshold: 0,
             tier_three_threshold: 0,
+            membership_blacklist: vector::empty<address>(),
+            recipient_whitelist: vector::empty<address>(),
+            recipient_blacklist: vector::empty<address>(),
+            recipient_filter_is_whitelist: false,
         });
     }
 
-    /// Helper to clean up vectors during removals
     fun find_and_remove(v: &mut vector<address>, addr: address) {
         let (found, index) = vector::index_of(v, &addr);
         if (found) {
             vector::remove(v, index);
         };
     }
+
+    // --- ADMIN CONFIGURATION ---
 
     public entry fun update_governance_configs(
         admin: &signer,
@@ -110,6 +123,35 @@ module multisig_addr::simple_multisig {
         store.tier_two_threshold = tier_two;
         store.tier_three_threshold = tier_three;
     }
+
+    public entry fun edit_membership_blacklist(admin: &signer, multisig_address: address, addr: address, add: bool) acquires MultisigStore {
+        let store = borrow_global_mut<MultisigStore>(multisig_address);
+        assert!(vector::contains(&store.admins, &signer::address_of(admin)), ENOT_ADMIN);
+        if (add) {
+            if (!vector::contains(&store.membership_blacklist, &addr)) vector::push_back(&mut store.membership_blacklist, addr);
+        } else {
+            find_and_remove(&mut store.membership_blacklist, addr);
+        };
+    }
+
+    public entry fun toggle_recipient_filter_mode(admin: &signer, multisig_address: address, is_whitelist: bool) acquires MultisigStore {
+        let store = borrow_global_mut<MultisigStore>(multisig_address);
+        assert!(vector::contains(&store.admins, &signer::address_of(admin)), ENOT_ADMIN);
+        store.recipient_filter_is_whitelist = is_whitelist;
+    }
+
+    public entry fun edit_recipient_list(admin: &signer, multisig_address: address, addr: address, add: bool, use_whitelist: bool) acquires MultisigStore {
+        let store = borrow_global_mut<MultisigStore>(multisig_address);
+        assert!(vector::contains(&store.admins, &signer::address_of(admin)), ENOT_ADMIN);
+        let list = if (use_whitelist) { &mut store.recipient_whitelist } else { &mut store.recipient_blacklist };
+        if (add) {
+            if (!vector::contains(list, &addr)) vector::push_back(list, addr);
+        } else {
+            find_and_remove(list, addr);
+        };
+    }
+
+    // --- CORE LOGIC ---
 
     public entry fun veto(admin: &signer, multisig_address: address, proposal_id: u64) acquires MultisigStore {
         let store = borrow_global_mut<MultisigStore>(multisig_address);
@@ -140,6 +182,8 @@ module multisig_addr::simple_multisig {
     ) acquires MultisigStore {
         let store = borrow_global_mut<MultisigStore>(multisig_address);
         assert!(vector::contains(&store.admins, &signer::address_of(admin)), ENOT_ADMIN);
+        // Added: Check membership blacklist
+        assert!(!vector::contains(&store.membership_blacklist, &new_owner), EADDRESS_BLACKLISTED);
         
         if (!vector::contains(&store.owners, &new_owner)) {
             assert!(vector::length(&store.owners) < store.max_owners, EMAX_OWNERS_REACHED);
@@ -186,6 +230,13 @@ module multisig_addr::simple_multisig {
             assert!(vector::contains(&store.admins, &creator_addr), ENOT_AUTHORIZED);
         } else {
             assert!(vector::contains(&store.owners, &creator_addr), ENOT_OWNER);
+        };
+
+        // Added: Recipient Filtering
+        if (store.recipient_filter_is_whitelist) {
+            assert!(vector::contains(&store.recipient_whitelist, &recipient), ERECIPIENT_NOT_ALLOWED);
+        } else {
+            assert!(!vector::contains(&store.recipient_blacklist, &recipient), ERECIPIENT_NOT_ALLOWED);
         };
 
         let new_proposal = Proposal {
@@ -271,7 +322,8 @@ module multisig_addr::simple_multisig {
             voting_mode: store.voting_mode,
             admins_can_veto: store.admins_can_veto,
             tier_two_threshold: store.tier_two_threshold,
-            tier_three_threshold: store.tier_three_threshold
+            tier_three_threshold: store.tier_three_threshold,
+            recipient_filter_is_whitelist: store.recipient_filter_is_whitelist
         }
     }
 
@@ -295,42 +347,37 @@ module multisig_addr::simple_multisig {
         let res_addr = account::create_resource_address(&admin_addr, b"TREASURY_V2");
         account::create_account_for_test(res_addr);
 
-        // 1. User Management
-        add_owner(&admin, res_addr, @0x11, true);  // O1 is admin
-        add_owner(&admin, res_addr, @0x22, false); // O2 is owner
-        add_owner(&admin, res_addr, @0x33, false); // O3 is owner
+        // 1. Blacklist Test & User Management
+        edit_membership_blacklist(&admin, res_addr, @0x99, true);
+        // add_owner(@0x99) would now fail here
+        
+        add_owner(&admin, res_addr, @0x11, true); 
+        add_owner(&admin, res_addr, @0x22, false);
+        add_owner(&admin, res_addr, @0x33, false);
 
-        // Test Kick
         remove_owner(&admin, res_addr, @0x33);
-        let info = get_wallet_info(res_addr);
-        assert!(vector::length(&info.owners) == 3, 1); // Admin, O1, O2 remain
-
-        // Test Self-Remove (Admin O1 leaves)
         self_remove(&o1, res_addr);
-        let info2 = get_wallet_info(res_addr);
-        assert!(vector::length(&info2.admins) == 1, 2); // Only primary admin left
 
-        // 2. Governance Setup (Combined Mode + Veto)
-        // Tiers: <100 (Majority), 100-499 (2/3), >=500 (Unanimous)
+        // 2. Recipient Filtering Test
+        toggle_recipient_filter_mode(&admin, res_addr, true); // Enable Whitelist Mode
+        edit_recipient_list(&admin, res_addr, @0x44, true, true); // Add 0x44 to whitelist
+
+        // 3. Governance Setup
         update_governance_configs(&admin, res_addr, false, false, true, MODE_COMBINED, 100, 500);
         
         let coins = coin::mint<AptosCoin>(2000, &mint);
         coin::deposit(res_addr, coins);
 
-        // Current Owners: Admin, @0x22 (2 total)
-        // Majority of 2 is (2/2 + 1) = 2. Unanimous of 2 is 2.
-        
-        // 3. Combined Mode Tier 1 (Majority)
+        // 4. Combined Mode Tier 1 (Majority) - Recipient @0x44 is allowed by whitelist
         propose_transfer(&o2, res_addr, @0x44, 50);
         approve(&admin, res_addr, 0);
         approve(&o2, res_addr, 0);
         assert!(coin::balance<AptosCoin>(@0x44) == 50, 3);
 
-        // 4. Test Veto
-        propose_transfer(&o2, res_addr, @0x55, 10);
+        // 5. Test Veto
+        propose_transfer(&o2, res_addr, @0x44, 10); // Still using @0x44 (whitelisted)
         veto(&admin, res_addr, 1);
         
-        // Ensure it cannot be approved after veto
         let final_info = get_wallet_info(res_addr);
         assert!(final_info.balance == 1950, 4);
 

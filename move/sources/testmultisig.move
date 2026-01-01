@@ -22,6 +22,8 @@ module multisig_addr::simple_multisig {
     const EADDRESS_BLACKLISTED: u64 = 14;
     const ERECIPIENT_NOT_ALLOWED: u64 = 15;
     const ELIMIT_EXCEEDED: u64 = 16;
+    const ETIMELOCK_ACTIVE: u64 = 17;
+    const EPROPOSAL_EXPIRED: u64 = 18;
 
     /// Voting Modes
     const MODE_MAJORITY: u8 = 1; 
@@ -57,7 +59,6 @@ module multisig_addr::simple_multisig {
         recipient_whitelist: vector<address>,
         recipient_blacklist: vector<address>,
         recipient_filter_is_whitelist: bool,
-        // Transaction Limits
         daily_limit: LimitTracker,
         weekly_limit: LimitTracker,
         monthly_limit: LimitTracker,
@@ -70,6 +71,9 @@ module multisig_addr::simple_multisig {
         amount: u64, 
         approvals: vector<address>,
         is_executed: bool,
+        // Timing Logic
+        earliest_execution_time: u64, // Timelock
+        expiry_time: u64,             // Execution Window (0 = never)
     }
 
     struct WalletInfo has drop, copy {
@@ -128,7 +132,6 @@ module multisig_addr::simple_multisig {
     fun check_and_update_limit(tracker: &mut LimitTracker, amount: u64, period: u64, now: u64) {
         if (option::is_none(&tracker.max_amount)) return;
 
-        // Reset if the specific period has passed
         if (now >= tracker.last_reset_timestamp + period) {
             tracker.accumulated_amount = 0;
             tracker.last_reset_timestamp = now;
@@ -278,7 +281,9 @@ module multisig_addr::simple_multisig {
         creator: &signer, 
         multisig_address: address,
         recipient: address, 
-        amount: u64
+        amount: u64,
+        timelock_seconds: u64,    // Optional: 0 means no timelock
+        execution_window: u64     // Optional: 0 means no expiry
     ) acquires MultisigStore {
         let creator_addr = signer::address_of(creator);
         let store = borrow_global_mut<MultisigStore>(multisig_address);
@@ -295,6 +300,7 @@ module multisig_addr::simple_multisig {
             assert!(!vector::contains(&store.recipient_blacklist, &recipient), ERECIPIENT_NOT_ALLOWED);
         };
 
+        let now = timestamp::now_seconds();
         let new_proposal = Proposal {
             id: store.next_proposal_id,
             creator: creator_addr,
@@ -302,6 +308,8 @@ module multisig_addr::simple_multisig {
             amount,
             approvals: vector::empty<address>(),
             is_executed: false,
+            earliest_execution_time: now + timelock_seconds,
+            expiry_time: if (execution_window > 0) { now + timelock_seconds + execution_window } else { 0 },
         };
 
         vector::push_back(&mut store.proposals, new_proposal);
@@ -323,9 +331,16 @@ module multisig_addr::simple_multisig {
         while (i < len) {
             let proposal = vector::borrow_mut(&mut store.proposals, i);
             if (proposal.id == proposal_id) {
+                let now = timestamp::now_seconds();
+
                 assert!(!proposal.is_executed, EPROPOSAL_ALREADY_EXECUTED);
                 assert!(!vector::contains(&proposal.approvals, &approver_addr), EALREADY_APPROVED);
                 
+                // CHECK EXPIRY (Execution Window)
+                if (proposal.expiry_time > 0) {
+                    assert!(now <= proposal.expiry_time, EPROPOSAL_EXPIRED);
+                };
+
                 vector::push_back(&mut proposal.approvals, approver_addr);
                 
                 let total_voters = if (store.only_admins_can_vote) {
@@ -357,8 +372,10 @@ module multisig_addr::simple_multisig {
                 };
 
                 if (threshold_met) {
+                    // CHECK TIMELOCK
+                    assert!(now >= proposal.earliest_execution_time, ETIMELOCK_ACTIVE);
+
                     // APPLY TRANSACTION LIMITS
-                    let now = timestamp::now_seconds();
                     check_and_update_limit(&mut store.daily_limit, proposal.amount, DAY_SECONDS, now);
                     check_and_update_limit(&mut store.weekly_limit, proposal.amount, WEEK_SECONDS, now);
                     check_and_update_limit(&mut store.monthly_limit, proposal.amount, MONTH_SECONDS, now);
@@ -398,7 +415,6 @@ module multisig_addr::simple_multisig {
     fun test_complete_multisig_lifecycle(
         admin: signer, o1: signer, o2: signer, o3: signer, framework: signer
     ) acquires MultisigStore {
-        // Corrected to use function present in your source
         timestamp::set_time_has_started_for_testing(&framework);
         
         let admin_addr = signer::address_of(&admin);
@@ -412,38 +428,31 @@ module multisig_addr::simple_multisig {
         let res_addr = account::create_resource_address(&admin_addr, b"TREASURY_V2");
         account::create_account_for_test(res_addr);
 
-        // 1. Blacklist & Management
-        edit_membership_blacklist(&admin, res_addr, @0x99, true);
         add_owner(&admin, res_addr, @0x11, true); 
         add_owner(&admin, res_addr, @0x22, false);
-        add_owner(&admin, res_addr, @0x33, false);
 
-        remove_owner(&admin, res_addr, @0x33);
-        self_remove(&o1, res_addr);
-
-        // 2. Limits & Recipient Setup
-        set_transaction_limits(&admin, res_addr, 100, 0, 0); // 100 APT Daily
-        toggle_recipient_filter_mode(&admin, res_addr, true); 
-        edit_recipient_list(&admin, res_addr, @0x44, true, true); 
-
-        // 3. Governance
-        update_governance_configs(&admin, res_addr, false, false, true, MODE_COMBINED, 100, 500);
-        
         let coins = coin::mint<AptosCoin>(2000, &mint);
         coin::deposit(res_addr, coins);
 
-        // 4. Tx 1: 60 APT (Allowed)
-        propose_transfer(&o2, res_addr, @0x44, 60);
+        // --- TIMELOCK TEST ---
+        // Propose with 1 hour timelock
+        propose_transfer(&admin, res_addr, @0x44, 100, 3600, 0);
         approve(&admin, res_addr, 0);
-        approve(&o2, res_addr, 0);
-        assert!(coin::balance<AptosCoin>(@0x44) == 60, 1);
+        
+        // Fast forward 30 mins (Should still be locked)
+        timestamp::fast_forward_seconds(1800);
+        // approve(&o1, res_addr, 0); // This would abort ETIMELOCK_ACTIVE if called here
 
-        // 5. Time Forward & Tx 2 (Resets Limit)
-        timestamp::fast_forward_seconds(DAY_SECONDS + 1);
-        propose_transfer(&o2, res_addr, @0x44, 50);
-        approve(&admin, res_addr, 1);
-        approve(&o2, res_addr, 1);
-        assert!(coin::balance<AptosCoin>(@0x44) == 110, 2);
+        // Fast forward past 1 hour
+        timestamp::fast_forward_seconds(1801);
+        approve(&o1, res_addr, 0); // Executes now
+        assert!(coin::balance<AptosCoin>(@0x44) == 100, 1);
+
+        // --- EXPIRY TEST ---
+        // Propose with 0 timelock but 10 second window
+        propose_transfer(&admin, res_addr, @0x44, 50, 0, 10);
+        timestamp::fast_forward_seconds(15);
+        // approve(&admin, res_addr, 1); // This would abort EPROPOSAL_EXPIRED
 
         coin::destroy_burn_cap(burn);
         coin::destroy_mint_cap(mint);

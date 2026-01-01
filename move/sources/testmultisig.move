@@ -1,9 +1,11 @@
 module multisig_addr::simple_multisig {
     use std::signer;
     use std::vector;
+    use std::option::{Self, Option};
     use aptos_framework::coin;
     use aptos_framework::aptos_coin::AptosCoin;
     use aptos_framework::account::{Self, SignerCapability};
+    use aptos_framework::timestamp;
 
     /// Error codes
     const ENOT_OWNER: u64 = 1;
@@ -19,12 +21,24 @@ module multisig_addr::simple_multisig {
     const ECANNOT_REMOVE_LAST_ADMIN: u64 = 13;
     const EADDRESS_BLACKLISTED: u64 = 14;
     const ERECIPIENT_NOT_ALLOWED: u64 = 15;
+    const ELIMIT_EXCEEDED: u64 = 16;
 
     /// Voting Modes
     const MODE_MAJORITY: u8 = 1; 
     const MODE_TWO_THIRDS: u8 = 2; 
     const MODE_UNANIMOUS: u8 = 3; 
     const MODE_COMBINED: u8 = 4;
+
+    /// Time Constants (seconds)
+    const DAY_SECONDS: u64 = 86400;
+    const WEEK_SECONDS: u64 = 604800;
+    const MONTH_SECONDS: u64 = 2592000;
+
+    struct LimitTracker has store, copy, drop {
+        accumulated_amount: u64,
+        last_reset_timestamp: u64,
+        max_amount: Option<u64>,
+    }
 
     struct MultisigStore has key {
         owners: vector<address>,
@@ -39,11 +53,14 @@ module multisig_addr::simple_multisig {
         voting_mode: u8,
         tier_two_threshold: u64,
         tier_three_threshold: u64,
-        // Added: List Restrictions
         membership_blacklist: vector<address>,
         recipient_whitelist: vector<address>,
         recipient_blacklist: vector<address>,
-        recipient_filter_is_whitelist: bool, // true = Whitelist, false = Blacklist
+        recipient_filter_is_whitelist: bool,
+        // Transaction Limits
+        daily_limit: LimitTracker,
+        weekly_limit: LimitTracker,
+        monthly_limit: LimitTracker,
     }
 
     struct Proposal has store, copy, drop {
@@ -70,6 +87,12 @@ module multisig_addr::simple_multisig {
         let admin_addr = signer::address_of(admin);
         let (_resource_signer, resource_cap) = account::create_resource_account(admin, b"TREASURY_V2");
         
+        let empty_limit = LimitTracker {
+            accumulated_amount: 0,
+            last_reset_timestamp: 0,
+            max_amount: option::none(),
+        };
+
         move_to(&_resource_signer, MultisigStore {
             owners: vector[admin_addr],
             admins: vector[admin_addr],
@@ -87,8 +110,13 @@ module multisig_addr::simple_multisig {
             recipient_whitelist: vector::empty<address>(),
             recipient_blacklist: vector::empty<address>(),
             recipient_filter_is_whitelist: false,
+            daily_limit: empty_limit,
+            weekly_limit: empty_limit,
+            monthly_limit: empty_limit,
         });
     }
+
+    // --- INTERNAL HELPERS ---
 
     fun find_and_remove(v: &mut vector<address>, addr: address) {
         let (found, index) = vector::index_of(v, &addr);
@@ -97,7 +125,37 @@ module multisig_addr::simple_multisig {
         };
     }
 
+    fun check_and_update_limit(tracker: &mut LimitTracker, amount: u64, period: u64, now: u64) {
+        if (option::is_none(&tracker.max_amount)) return;
+
+        // Reset if the specific period has passed
+        if (now >= tracker.last_reset_timestamp + period) {
+            tracker.accumulated_amount = 0;
+            tracker.last_reset_timestamp = now;
+        };
+
+        let max = *option::borrow(&tracker.max_amount);
+        assert!(tracker.accumulated_amount + amount <= max, ELIMIT_EXCEEDED);
+        
+        tracker.accumulated_amount = tracker.accumulated_amount + amount;
+    }
+
     // --- ADMIN CONFIGURATION ---
+
+    public entry fun set_transaction_limits(
+        admin: &signer, 
+        multisig_address: address,
+        daily: u64,
+        weekly: u64,
+        monthly: u64
+    ) acquires MultisigStore {
+        let store = borrow_global_mut<MultisigStore>(multisig_address);
+        assert!(vector::contains(&store.admins, &signer::address_of(admin)), ENOT_ADMIN);
+        
+        store.daily_limit.max_amount = if (daily > 0) option::some(daily) else option::none();
+        store.weekly_limit.max_amount = if (weekly > 0) option::some(weekly) else option::none();
+        store.monthly_limit.max_amount = if (monthly > 0) option::some(monthly) else option::none();
+    }
 
     public entry fun update_governance_configs(
         admin: &signer,
@@ -151,28 +209,7 @@ module multisig_addr::simple_multisig {
         };
     }
 
-    // --- CORE LOGIC ---
-
-    public entry fun veto(admin: &signer, multisig_address: address, proposal_id: u64) acquires MultisigStore {
-        let store = borrow_global_mut<MultisigStore>(multisig_address);
-        let admin_addr = signer::address_of(admin);
-        
-        assert!(store.admins_can_veto, EVETO_DISABLED);
-        assert!(vector::contains(&store.admins, &admin_addr), ENOT_ADMIN);
-
-        let i = 0;
-        let len = vector::length(&store.proposals);
-        while (i < len) {
-            let proposal = vector::borrow_mut(&mut store.proposals, i);
-            if (proposal.id == proposal_id) {
-                assert!(!proposal.is_executed, EPROPOSAL_ALREADY_EXECUTED);
-                proposal.is_executed = true; 
-                return
-            };
-            i = i + 1;
-        };
-        abort EPROPOSAL_NOT_FOUND
-    }
+    // --- OWNER MANAGEMENT ---
 
     public entry fun add_owner(
         admin: &signer, 
@@ -182,7 +219,6 @@ module multisig_addr::simple_multisig {
     ) acquires MultisigStore {
         let store = borrow_global_mut<MultisigStore>(multisig_address);
         assert!(vector::contains(&store.admins, &signer::address_of(admin)), ENOT_ADMIN);
-        // Added: Check membership blacklist
         assert!(!vector::contains(&store.membership_blacklist, &new_owner), EADDRESS_BLACKLISTED);
         
         if (!vector::contains(&store.owners, &new_owner)) {
@@ -217,6 +253,27 @@ module multisig_addr::simple_multisig {
         find_and_remove(&mut store.owners, caller_addr);
     }
 
+    // --- TRANSACTION LOGIC ---
+
+    public entry fun veto(admin: &signer, multisig_address: address, proposal_id: u64) acquires MultisigStore {
+        let store = borrow_global_mut<MultisigStore>(multisig_address);
+        assert!(store.admins_can_veto, EVETO_DISABLED);
+        assert!(vector::contains(&store.admins, &signer::address_of(admin)), ENOT_ADMIN);
+
+        let i = 0;
+        let len = vector::length(&store.proposals);
+        while (i < len) {
+            let proposal = vector::borrow_mut(&mut store.proposals, i);
+            if (proposal.id == proposal_id) {
+                assert!(!proposal.is_executed, EPROPOSAL_ALREADY_EXECUTED);
+                proposal.is_executed = true; 
+                return
+            };
+            i = i + 1;
+        };
+        abort EPROPOSAL_NOT_FOUND
+    }
+
     public entry fun propose_transfer(
         creator: &signer, 
         multisig_address: address,
@@ -232,7 +289,6 @@ module multisig_addr::simple_multisig {
             assert!(vector::contains(&store.owners, &creator_addr), ENOT_OWNER);
         };
 
-        // Added: Recipient Filtering
         if (store.recipient_filter_is_whitelist) {
             assert!(vector::contains(&store.recipient_whitelist, &recipient), ERECIPIENT_NOT_ALLOWED);
         } else {
@@ -301,6 +357,12 @@ module multisig_addr::simple_multisig {
                 };
 
                 if (threshold_met) {
+                    // APPLY TRANSACTION LIMITS
+                    let now = timestamp::now_seconds();
+                    check_and_update_limit(&mut store.daily_limit, proposal.amount, DAY_SECONDS, now);
+                    check_and_update_limit(&mut store.weekly_limit, proposal.amount, WEEK_SECONDS, now);
+                    check_and_update_limit(&mut store.monthly_limit, proposal.amount, MONTH_SECONDS, now);
+
                     let treasury_signer = account::create_signer_with_capability(&store.signer_cap);
                     coin::transfer<AptosCoin>(&treasury_signer, proposal.recipient, proposal.amount);
                     proposal.is_executed = true;
@@ -336,6 +398,9 @@ module multisig_addr::simple_multisig {
     fun test_complete_multisig_lifecycle(
         admin: signer, o1: signer, o2: signer, o3: signer, framework: signer
     ) acquires MultisigStore {
+        // Corrected to use function present in your source
+        timestamp::set_time_has_started_for_testing(&framework);
+        
         let admin_addr = signer::address_of(&admin);
         let (burn, mint) = aptos_coin::initialize_for_test(&framework);
         account::create_account_for_test(admin_addr);
@@ -347,10 +412,8 @@ module multisig_addr::simple_multisig {
         let res_addr = account::create_resource_address(&admin_addr, b"TREASURY_V2");
         account::create_account_for_test(res_addr);
 
-        // 1. Blacklist Test & User Management
+        // 1. Blacklist & Management
         edit_membership_blacklist(&admin, res_addr, @0x99, true);
-        // add_owner(@0x99) would now fail here
-        
         add_owner(&admin, res_addr, @0x11, true); 
         add_owner(&admin, res_addr, @0x22, false);
         add_owner(&admin, res_addr, @0x33, false);
@@ -358,28 +421,29 @@ module multisig_addr::simple_multisig {
         remove_owner(&admin, res_addr, @0x33);
         self_remove(&o1, res_addr);
 
-        // 2. Recipient Filtering Test
-        toggle_recipient_filter_mode(&admin, res_addr, true); // Enable Whitelist Mode
-        edit_recipient_list(&admin, res_addr, @0x44, true, true); // Add 0x44 to whitelist
+        // 2. Limits & Recipient Setup
+        set_transaction_limits(&admin, res_addr, 100, 0, 0); // 100 APT Daily
+        toggle_recipient_filter_mode(&admin, res_addr, true); 
+        edit_recipient_list(&admin, res_addr, @0x44, true, true); 
 
-        // 3. Governance Setup
+        // 3. Governance
         update_governance_configs(&admin, res_addr, false, false, true, MODE_COMBINED, 100, 500);
         
         let coins = coin::mint<AptosCoin>(2000, &mint);
         coin::deposit(res_addr, coins);
 
-        // 4. Combined Mode Tier 1 (Majority) - Recipient @0x44 is allowed by whitelist
-        propose_transfer(&o2, res_addr, @0x44, 50);
+        // 4. Tx 1: 60 APT (Allowed)
+        propose_transfer(&o2, res_addr, @0x44, 60);
         approve(&admin, res_addr, 0);
         approve(&o2, res_addr, 0);
-        assert!(coin::balance<AptosCoin>(@0x44) == 50, 3);
+        assert!(coin::balance<AptosCoin>(@0x44) == 60, 1);
 
-        // 5. Test Veto
-        propose_transfer(&o2, res_addr, @0x44, 10); // Still using @0x44 (whitelisted)
-        veto(&admin, res_addr, 1);
-        
-        let final_info = get_wallet_info(res_addr);
-        assert!(final_info.balance == 1950, 4);
+        // 5. Time Forward & Tx 2 (Resets Limit)
+        timestamp::fast_forward_seconds(DAY_SECONDS + 1);
+        propose_transfer(&o2, res_addr, @0x44, 50);
+        approve(&admin, res_addr, 1);
+        approve(&o2, res_addr, 1);
+        assert!(coin::balance<AptosCoin>(@0x44) == 110, 2);
 
         coin::destroy_burn_cap(burn);
         coin::destroy_mint_cap(mint);

@@ -43,6 +43,7 @@ module multisig_addr::simple_multisig {
     }
 
     struct MultisigStore has key {
+        name: vector<u8>, // Added to store the wallet seed/name
         owners: vector<address>,
         admins: vector<address>,
         max_owners: u64,
@@ -71,12 +72,12 @@ module multisig_addr::simple_multisig {
         amount: u64, 
         approvals: vector<address>,
         is_executed: bool,
-        // Timing Logic
-        earliest_execution_time: u64, // Timelock
-        expiry_time: u64,             // Execution Window (0 = never)
+        earliest_execution_time: u64,
+        expiry_time: u64,
     }
 
     struct WalletInfo has drop, copy {
+        name: vector<u8>, // Added to WalletInfo view
         owners: vector<address>,
         admins: vector<address>,
         balance: u64,
@@ -87,9 +88,11 @@ module multisig_addr::simple_multisig {
         recipient_filter_is_whitelist: bool
     }
 
-    public entry fun initialize(admin: &signer, max_owners: u64) {
+    /// Fixed to accept and SAVE a custom seed for multiple instances
+    public entry fun initialize(admin: &signer, seed: vector<u8>, max_owners: u64) {
         let admin_addr = signer::address_of(admin);
-        let (_resource_signer, resource_cap) = account::create_resource_account(admin, b"TREASURY_V2");
+        // seed is used here to derive the address...
+        let (_resource_signer, resource_cap) = account::create_resource_account(admin, copy seed);
         
         let empty_limit = LimitTracker {
             accumulated_amount: 0,
@@ -98,6 +101,7 @@ module multisig_addr::simple_multisig {
         };
 
         move_to(&_resource_signer, MultisigStore {
+            name: seed, // ...and saved here so it can be viewed later
             owners: vector[admin_addr],
             admins: vector[admin_addr],
             max_owners,
@@ -282,8 +286,8 @@ module multisig_addr::simple_multisig {
         multisig_address: address,
         recipient: address, 
         amount: u64,
-        timelock_seconds: u64,    // Optional: 0 means no timelock
-        execution_window: u64     // Optional: 0 means no expiry
+        timelock_seconds: u64,
+        execution_window: u64 
     ) acquires MultisigStore {
         let creator_addr = signer::address_of(creator);
         let store = borrow_global_mut<MultisigStore>(multisig_address);
@@ -336,7 +340,6 @@ module multisig_addr::simple_multisig {
                 assert!(!proposal.is_executed, EPROPOSAL_ALREADY_EXECUTED);
                 assert!(!vector::contains(&proposal.approvals, &approver_addr), EALREADY_APPROVED);
                 
-                // CHECK EXPIRY (Execution Window)
                 if (proposal.expiry_time > 0) {
                     assert!(now <= proposal.expiry_time, EPROPOSAL_EXPIRED);
                 };
@@ -372,10 +375,8 @@ module multisig_addr::simple_multisig {
                 };
 
                 if (threshold_met) {
-                    // CHECK TIMELOCK
                     assert!(now >= proposal.earliest_execution_time, ETIMELOCK_ACTIVE);
 
-                    // APPLY TRANSACTION LIMITS
                     check_and_update_limit(&mut store.daily_limit, proposal.amount, DAY_SECONDS, now);
                     check_and_update_limit(&mut store.weekly_limit, proposal.amount, WEEK_SECONDS, now);
                     check_and_update_limit(&mut store.monthly_limit, proposal.amount, MONTH_SECONDS, now);
@@ -395,6 +396,7 @@ module multisig_addr::simple_multisig {
     public fun get_wallet_info(multisig_address: address): WalletInfo acquires MultisigStore {
         let store = borrow_global<MultisigStore>(multisig_address);
         WalletInfo {
+            name: store.name, // Returns the saved seed/name
             owners: store.owners,
             admins: store.admins,
             balance: coin::balance<AptosCoin>(multisig_address),
@@ -411,53 +413,6 @@ module multisig_addr::simple_multisig {
     #[test_only]
     use aptos_framework::aptos_coin;
 
-    // #[test(admin = @multisig_addr, o1 = @0x11, o2 = @0x22, o3 = @0x33, framework = @0x1)]
-    // fun test_complete_multisig_lifecycle(
-    //     admin: signer, o1: signer, o2: signer, o3: signer, framework: signer
-    // ) acquires MultisigStore {
-    //     timestamp::set_time_has_started_for_testing(&framework);
-        
-    //     let admin_addr = signer::address_of(&admin);
-    //     let (burn, mint) = aptos_coin::initialize_for_test(&framework);
-    //     account::create_account_for_test(admin_addr);
-    //     account::create_account_for_test(@0x11);
-    //     account::create_account_for_test(@0x22);
-    //     account::create_account_for_test(@0x33);
-
-    //     initialize(&admin, 10);
-    //     let res_addr = account::create_resource_address(&admin_addr, b"TREASURY_V2");
-    //     account::create_account_for_test(res_addr);
-
-    //     add_owner(&admin, res_addr, @0x11, true); 
-    //     add_owner(&admin, res_addr, @0x22, false);
-
-    //     let coins = coin::mint<AptosCoin>(2000, &mint);
-    //     coin::deposit(res_addr, coins);
-
-    //     // --- TIMELOCK TEST ---
-    //     // Propose with 1 hour timelock
-    //     propose_transfer(&admin, res_addr, @0x44, 100, 3600, 0);
-    //     approve(&admin, res_addr, 0);
-        
-    //     // Fast forward 30 mins (Should still be locked)
-    //     timestamp::fast_forward_seconds(1800);
-    //     // approve(&o1, res_addr, 0); // This would abort ETIMELOCK_ACTIVE if called here
-
-    //     // Fast forward past 1 hour
-    //     timestamp::fast_forward_seconds(1801);
-    //     approve(&o1, res_addr, 0); // Executes now
-    //     assert!(coin::balance<AptosCoin>(@0x44) == 100, 1);
-
-    //     // --- EXPIRY TEST ---
-    //     // Propose with 0 timelock but 10 second window
-    //     propose_transfer(&admin, res_addr, @0x44, 50, 0, 10);
-    //     timestamp::fast_forward_seconds(15);
-    //     // approve(&admin, res_addr, 1); // This would abort EPROPOSAL_EXPIRED
-
-    //     coin::destroy_burn_cap(burn);
-    //     coin::destroy_mint_cap(mint);
-    // }
-
     #[test(admin = @multisig_addr, o1 = @0x11, o2 = @0x22, framework = @0x1)]
     fun test_exhaustive_multisig_features(
         admin: signer, o1: signer, o2: signer, framework: signer
@@ -470,68 +425,60 @@ module multisig_addr::simple_multisig {
         account::create_account_for_test(admin_addr);
         account::create_account_for_test(@0x11);
         account::create_account_for_test(@0x22);
-        account::create_account_for_test(@0x33); // For Blacklist testing
+        account::create_account_for_test(@0x33); 
         
-        // 2. Initialization
-        initialize(&admin, 3);
-        let res_addr = account::create_resource_address(&admin_addr, b"TREASURY_V2");
+        // 2. Initialization with SEED
+        let my_seed = b"TREASURY_V2";
+        initialize(&admin, my_seed, 3);
+        
+        // 3. Fix: Calculate the resource address using the SAME seed used in initialize
+        let res_addr = account::create_resource_address(&admin_addr, my_seed);
         account::create_account_for_test(res_addr);
-        coin::register<AptosCoin>(&admin); // For receiving back later
+        coin::register<AptosCoin>(&admin);
 
-        // 3. Test Membership & Blacklist
-        // Blacklist 0x33 so they cannot be added as owner
+        // Verify Name is saved correctly
+        let info = get_wallet_info(res_addr);
+        assert!(info.name == b"TREASURY_V2", 100);
+
+        // 4. Test Membership
         edit_membership_blacklist(&admin, res_addr, @0x33, true);
+        add_owner(&admin, res_addr, @0x11, true); 
+        add_owner(&admin, res_addr, @0x22, false); 
         
-        add_owner(&admin, res_addr, @0x11, true); // O1 is Admin
-        add_owner(&admin, res_addr, @0x22, false); // O2 is Owner
-        
-        // 4. Test Governance Configs (Combined Voting & Veto)
+        // 5. Governance Configs
         update_governance_configs(
             &admin, 
             res_addr, 
-            true,   // only admins can initiate
-            false,  // anyone (owners) can vote
-            true,   // admins can veto
+            true, 
+            false, 
+            true, 
             MODE_COMBINED, 
-            1000,   // Tier 2: 2/3rds starts at 1000
-            5000    // Tier 3: Unanimous starts at 5000
+            1000, 
+            5000
         );
 
-        // 5. Test Recipient Filtering (Whitelist)
+        // 6. Recipient Filtering
         toggle_recipient_filter_mode(&admin, res_addr, true);
-        edit_recipient_list(&admin, res_addr, @0x11, true, true); // Whitelist O1
+        edit_recipient_list(&admin, res_addr, @0x11, true, true);
 
-        // 6. Test Limits (Daily Limit of 1000)
+        // 7. Limits
         set_transaction_limits(&admin, res_addr, 1000, 0, 0);
 
-        // 7. Test Proposal Flow: Tier 1 (Majority)
+        // 8. Proposal Flow
         let coins = coin::mint<AptosCoin>(10000, &mint);
         coin::deposit(res_addr, coins);
         
-        // Proposal for 500 (Tier 1: Majority of 3 = 2 approvals)
         propose_transfer(&admin, res_addr, @0x11, 500, 0, 0);
         approve(&admin, res_addr, 0);
-        approve(&o2, res_addr, 0); // Executes here
+        approve(&o2, res_addr, 0);
         assert!(coin::balance<AptosCoin>(@0x11) == 500, 101);
 
-        // 8. Test Proposal Flow: Tier 2 (Two-Thirds)
-        // Proposal for 1500 (Tier 2: 2/3 of 3 = 2 approvals)
+        // 9. Veto Test
         propose_transfer(&o1, res_addr, @0x11, 1500, 0, 0); 
         approve(&o1, res_addr, 1);
-        
-        // Test VETO functionality
         veto(&admin, res_addr, 1);
-        let info = get_wallet_info(res_addr);
-        // Proposal 1 is now marked "executed" (cancelled) due to veto
         
-        // 9. Test Limits Enforcement (Daily Limit)
-        // We already spent 500. Trying to spend 600 more should fail.
-        propose_transfer(&admin, res_addr, @0x11, 600, 0, 0);
-        approve(&admin, res_addr, 2);
-        // Note: In a real test, you'd wrap the next line in an #[expected_failure]
-        // approve(&o1, res_addr, 2); // This would abort with ELIMIT_EXCEEDED
-
-        // 10. Test Self-Removal
+        // 10. Self-Removal
         self_remove(&o2, res_addr);
         let info_after = get_wallet_info(res_addr);
         assert!(vector::length(&info_after.owners) == 2, 102);

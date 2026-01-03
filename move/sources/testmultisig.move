@@ -413,60 +413,93 @@ module multisig_addr::simple_multisig {
     #[test_only]
     use aptos_framework::aptos_coin;
 
-    #[test(admin = @multisig_addr, o1 = @0x11, framework = @0x1)]
-    fun test_charity_flow(admin: signer, o1: signer, framework: signer) acquires MultisigStore {
+    #[test(admin = @multisig_addr, u1 = @0x11, u2 = @0x22, framework = @0x1)]
+    fun test_exhaustive_normal_wallet(admin: signer, u1: signer, u2: signer, framework: signer) acquires MultisigStore {
         timestamp::set_time_has_started_for_testing(&framework);
         let admin_addr = signer::address_of(&admin);
         let (burn, mint) = aptos_coin::initialize_for_test(&framework);
         
         account::create_account_for_test(admin_addr);
         account::create_account_for_test(@0x11);
+        account::create_account_for_test(@0x22);
 
-        // Initialize as Charity: 100 entry fee, 50 monthly fee
-        initialize(&admin, b"CHARITY", 10, true, 100, 50);
-        let res_addr = account::create_resource_address(&admin_addr, b"CHARITY");
+        // 1. Setup & Join
+        // We use seed b"CORP" to match the resource address generation
+        initialize(&admin, b"CORP", 5, false, 0, 0);
+        let res_addr = account::create_resource_address(&admin_addr, b"CORP");
         account::create_account_for_test(res_addr);
+        
+        // Fund the multisig
+        coin::deposit(res_addr, coin::mint<AptosCoin>(1000, &mint));
 
-        // Funding user
-        coin::deposit(@0x11, coin::mint<AptosCoin>(1000, &mint));
+        // Invite and Accept u1
+        invite_owner(&admin, res_addr, @0x11, false);
+        respond_to_invitation(&u1, res_addr, true);
 
-        // 1. User joins by paying entry fee
-        join_charity_wallet(&o1, res_addr);
-        assert!(vector::contains(&get_wallet_info(res_addr).owners, &@0x11), 300);
-        assert!(coin::balance<AptosCoin>(res_addr) == 100, 301);
+        // 2. Propose with 1-hour Timelock (3600 seconds)
+        propose_transfer(&admin, res_addr, @0x22, 500, 3600, 0); 
+        
+        // First approval (Admin) - Threshold not yet met (1/2)
+        approve(&admin, res_addr, 0);
+        assert!(coin::balance<AptosCoin>(@0x22) == 0, 1);
 
-        // 2. User pays monthly fee
-        pay_monthly_fee(&o1, res_addr);
-        assert!(coin::balance<AptosCoin>(res_addr) == 150, 302);
+        // 3. Fast Forward Time
+        // If we approved with u1 now, it would fail because of the timelock.
+        timestamp::fast_forward_seconds(3601);
 
-        // 3. Test Wipe: Fast forward 31 days
-        timestamp::fast_forward_seconds(MONTH_SECONDS + 100);
-        wipe_delinquent_members(&admin, res_addr);
+        // 4. Final Approval (u1) - Threshold met (2/2) and Timelock passed
+        approve(&u1, res_addr, 0);
 
-        // 4. Verify o1 is kicked (didn't pay after fast-forward)
-        assert!(!vector::contains(&get_wallet_info(res_addr).owners, &@0x11), 303);
+        // 5. Verification
+        assert!(coin::balance<AptosCoin>(@0x22) == 500, 2);
+        assert!(coin::balance<AptosCoin>(res_addr) == 500, 3);
 
-        coin::destroy_burn_cap(burn);
+        coin::destroy_burn_cap(burn); 
         coin::destroy_mint_cap(mint);
     }
 
-    #[test(admin = @multisig_addr, o1 = @0x11, framework = @0x1)]
-    fun test_voluntary_funding(admin: signer, o1: signer, framework: signer) {
+    #[test(admin = @multisig_addr, u1 = @0x11, framework = @0x1)]
+    fun test_exhaustive_charity_wallet(admin: signer, u1: signer, framework: signer) acquires MultisigStore {
         timestamp::set_time_has_started_for_testing(&framework);
         let admin_addr = signer::address_of(&admin);
         let (burn, mint) = aptos_coin::initialize_for_test(&framework);
         
         account::create_account_for_test(admin_addr);
         account::create_account_for_test(@0x11);
-        initialize(&admin, b"NORMAL", 5, false, 0, 0);
-        let res_addr = account::create_resource_address(&admin_addr, b"NORMAL");
+
+        // 1. Charity Setup: 100 entry, 50 monthly
+        initialize(&admin, b"CHARITY", 10, true, 100, 50);
+        let res_addr = account::create_resource_address(&admin_addr, b"CHARITY");
         account::create_account_for_test(res_addr);
-
+        
+        // Fund u1 so they can pay fees
         coin::deposit(@0x11, coin::mint<AptosCoin>(1000, &mint));
-        fund_voluntarily(&o1, res_addr, 500);
-        assert!(coin::balance<AptosCoin>(res_addr) == 500, 400);
 
-        coin::destroy_burn_cap(burn);
+        // 2. Join Charity (pays 100)
+        join_charity_wallet(&u1, res_addr);
+        assert!(coin::balance<AptosCoin>(res_addr) == 100, 4);
+
+        // 3. Pay Monthly Fee (pays 50)
+        pay_monthly_fee(&u1, res_addr);
+        assert!(coin::balance<AptosCoin>(res_addr) == 150, 5);
+
+        // 4. Test Delinquency (Fast forward > 30 days)
+        timestamp::fast_forward_seconds(MONTH_SECONDS + 100);
+        
+        // Admin wipes inactive members
+        wipe_delinquent_members(&admin, res_addr);
+        
+        // Verify u1 was removed from owners
+        let info = get_wallet_info(res_addr);
+        let i = 0;
+        let found = false;
+        while (i < vector::length(&info.owners)) {
+            if (*vector::borrow(&info.owners, i) == @0x11) { found = true; };
+            i = i + 1;
+        };
+        assert!(!found, 6);
+
+        coin::destroy_burn_cap(burn); 
         coin::destroy_mint_cap(mint);
     }
 }

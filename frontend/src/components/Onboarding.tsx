@@ -7,32 +7,78 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [error, setError] = useState("");
 
   const handleRegister = async () => {
-    if (!account || !signMessage) return;
-    if (nickname.length < 3) return setError("Nickname too short");
+  // 1. Guard clauses: Ensure wallet is connected and state is valid
+  if (!account || !signMessage) {
+    setError("Wallet not connected correctly.");
+    return;
+  }
 
-    try {
-      const message = `Registering nickname: ${nickname}`;
-      const response = await signMessage({ message, nonce: "1" });
+  if (!nickname || nickname.length < 3) {
+    setError("Nickname must be at least 3 characters long.");
+    return;
+  }
 
-      const res = await fetch("http://localhost:3001/api/user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          address: account.address,
-          nickname,
-          signature: response.signature,
-          publicKey: account.publicKey,
-        }),
-      });
+  setError(""); // Clear previous errors
 
-      if (res.status === 409) return setError("Nickname already taken!");
-      if (res.ok) onComplete();
-      else setError("Server error during registration");
+  const message = `Registering nickname: ${nickname}`;
 
-    } catch (err) {
-      setError("Signature rejected or failed.");
+  try {
+    const response: any = await signMessage({ message, nonce: "1" });
+
+    // 1. Dig into the nested structure you found
+    // We check for response.signature.data.data OR response.signature.data
+    const rawData = response.signature?.data?.data || response.signature?.data || response.signature;
+
+    if (!rawData) throw new Error("Signature data not found in wallet response");
+
+    // 2. Convert Uint8Array/Array to Hex String
+    // This handles both a raw array of numbers and a Uint8Array
+    const sigStr = Array.from(new Uint8Array(rawData))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    if (!sigStr) {
+      throw new Error("Failed to retrieve signature from wallet.");
     }
-  };
+
+    // 4. Send the payload to your Node.js backend
+    const res = await fetch("http://localhost:3001/api/user", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json" 
+      },
+      body: JSON.stringify({
+        address: account.address,
+        nickname: nickname,
+        signature: sigStr,
+        publicKey: account.publicKey?.toString(), 
+      }),
+    });
+
+    const data = await res.json();
+
+    // 5. Handle Server Responses
+    if (res.ok) {
+      console.log("Registration successful:", data);
+      onComplete(); // Callback to refresh the view/navigator
+    } else {
+      // Handle specific errors like 409 (Conflict/Nickname taken)
+      setError(data.error || "Registration failed. Please try again.");
+    }
+
+  } catch (err: any) {
+    console.error("Onboarding Error:", err);
+    
+    // Check if user rejected the transaction/signature
+    if (err.name === "UserRejectedRequestError" || err.message?.includes("rejected")) {
+      setError("Signature request was rejected in the wallet.");
+    } else {
+      setError(err.message || "An unexpected error occurred.");
+    }
+  } finally {
+    console.log("hurray");
+  }
+};
 
   return (
     <div className="max-w-md mx-auto mt-20 p-8 bg-white rounded-3xl shadow-2xl">

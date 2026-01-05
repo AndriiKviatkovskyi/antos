@@ -18,5 +18,6 @@ model User {
   address   String   @id // The Aptos Address
   nickname  String   @unique
   bio       String?
+  pfp       String?
   createdAt DateTime @default(now())
 }

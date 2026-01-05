@@ -1,11 +1,22 @@
 import { AptosWalletAdapterProvider } from "@aptos-labs/wallet-adapter-react";
-import { MainNavigator } from "./components/MainNavigator.js";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { MainNavigator } from "./components/MainNavigator";
+import { Dashboard } from "./components/Dashboard.js";
+import { ProfilePage } from "./pages/ProfilePage.js";
 
 function App() {
   return (
-    // autoConnect ensures the user stays logged in on refresh
     <AptosWalletAdapterProvider autoConnect={true}>
-      <MainNavigator />
+      <BrowserRouter>
+        <Routes>
+          {/* MainNavigator acts as the Logic Guard and Layout */}
+          <Route path="/" element={<MainNavigator />}>
+            <Route index element={<Dashboard />} />
+            <Route path="myprofile" element={<ProfilePage />} />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
     </AptosWalletAdapterProvider>
   );
 }

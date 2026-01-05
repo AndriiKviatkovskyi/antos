@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
+import { onboardingStyles as s } from "../styles/componentStyles";
 
 export function Onboarding({ onComplete }: { onComplete: () => void }) {
   const { account, signMessage } = useWallet();
@@ -18,7 +19,9 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
       const response: any = await signMessage({ message, nonce: "1" });
       
       const rawData = response.signature?.data?.data || response.signature?.data || response.signature;
-      const sigStr = Array.from(new Uint8Array(rawData)).map(b => b.toString(16).padStart(2, '0')).join('');
+      const sigStr = Array.from(new Uint8Array(rawData))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
 
       const res = await fetch("http://localhost:3001/api/user", {
         method: "POST",
@@ -41,37 +44,35 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
-      <div className="max-w-md w-full bg-white p-10 rounded-[2.5rem] shadow-2xl border border-slate-100">
-        <h2 className="text-3xl font-black mb-2">Create Profile</h2>
-        <p className="text-slate-400 mb-8 text-sm">Tell the world who you are on-chain.</p>
+    <div className={s.container}>
+      <div className={s.card}>
+        <h2 className={s.title}>Create Profile</h2>
+        <p className={s.subtitle}>Tell the world who you are on-chain.</p>
         
-        <div className="space-y-4">
+        <div className={s.formStack}>
           <div>
-            <label className="text-xs font-black uppercase text-slate-400 ml-1">Nickname *</label>
+            <label className={s.label}>Nickname *</label>
             <input 
-              className="w-full bg-slate-50 border-2 border-transparent p-4 rounded-2xl focus:border-blue-500 outline-none transition-all" 
+              className={s.input} 
               placeholder="Vitalik"
               value={form.nickname}
               onChange={(e) => setForm({...form, nickname: e.target.value})}
             />
           </div>
           <div>
-            <label className="text-xs font-black uppercase text-slate-400 ml-1">Bio (Optional)</label>
+            <label className={s.label}>Bio (Optional)</label>
             <textarea 
-              className="w-full bg-slate-50 border-2 border-transparent p-4 rounded-2xl focus:border-blue-500 outline-none transition-all" 
+              className={s.input} 
               placeholder="Building the future..."
+              value={form.bio}
               onChange={(e) => setForm({...form, bio: e.target.value})}
             />
           </div>
         </div>
 
-        {error && <p className="text-red-500 text-xs mt-4">{error}</p>}
+        {error && <p className={s.errorText}>{error}</p>}
         
-        <button 
-          onClick={handleRegister} 
-          className="w-full mt-8 bg-blue-600 text-white font-black py-5 rounded-2xl hover:bg-blue-700 hover:-translate-y-1 transition-all shadow-xl shadow-blue-200"
-        >
+        <button onClick={handleRegister} className={s.submitBtn}>
           Sign & Create
         </button>
       </div>

@@ -16,23 +16,37 @@ export class UserController {
   }
 
   static async register(req: Request, res: Response) {
-    const { address, nickname, signature, publicKey } = req.body;
+    // Extract bio and pfp from body
+    const { address, nickname, signature, publicKey, bio, pfp } = req.body;
 
-    // Basic Validation
     if (!address || !nickname || !signature || !publicKey) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
     try {
-      const user = await UserService.register(address, nickname, signature, publicKey);
+      // Pass the extra fields to the service
+      const user = await UserService.register(address, nickname, signature, publicKey, bio, pfp);
       return res.status(201).json(user);
     } catch (err: any) {
-      // Handle Prisma Unique Constraint (Nickname taken)
       if (err.code === 'P2002' || err.message.includes("Unique constraint")) {
         return res.status(409).json({ error: "Nickname already taken" });
       }
-      // Handle Auth failure
       return res.status(401).json({ error: err.message });
+    }
+  }
+
+  static async updateProfile(req: Request, res: Response) {
+    const { address } = req.params;
+    const { nickname, bio, pfp } = req.body;
+
+    if (!address) return res.status(400).json({ error: "Address required" });
+
+    try {
+      const updatedUser = await UserService.update(address, { nickname, bio, pfp });
+      return res.json(updatedUser);
+    } catch (err: any) {
+      if (err.code === 'P2002') return res.status(409).json({ error: "Nickname already taken" });
+      return res.status(500).json({ error: "Failed to update profile" });
     }
   }
 }

@@ -1,9 +1,10 @@
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { useState, useEffect } from "react";
+import { Outlet } from "react-router-dom";
 import { Onboarding } from "./Onboarding";
-import { Dashboard } from "./Dashboard";
-import { Navbar } from "./Navbar.js";
+import { Navbar } from "./Navbar";
 import { WalletSelector } from "@aptos-labs/wallet-adapter-ant-design";
+import { mainStyles as s } from "../styles/componentStyles"; // Importing styles
 
 export function MainNavigator() {
   const { account, connected } = useWallet();
@@ -11,7 +12,7 @@ export function MainNavigator() {
 
   useEffect(() => {
     if (!connected) {
-      setProfileStatus("loading"); // Reset state when wallet disconnects
+      setProfileStatus("loading");
       return;
     }
 
@@ -28,17 +29,14 @@ export function MainNavigator() {
     if (account) checkProfile();
   }, [connected, account]);
 
-  // 1. WELCOME SCREEN (Not Connected)
+  // SCREEN 1: DISCONNECTED
   if (!connected) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-6 text-center">
-        <div className="max-w-md space-y-6">
-          <div className="w-20 h-20 bg-blue-600 rounded-3xl mx-auto shadow-2xl shadow-blue-200 flex items-center justify-center">
-             <span className="text-white text-3xl font-black">A</span>
-          </div>
-          <h1 className="text-5xl font-black text-slate-900 leading-tight">Secure your assets on Movement.</h1>
-          <p className="text-slate-500 text-lg">Connect your wallet to manage your multisig and profile.</p>
-          <div className="inline-block p-2 bg-white rounded-2xl shadow-xl border border-slate-100">
+      <div className={s.welcomeWrapper}>
+        <div className={s.welcomeContainer}>
+          <div className={s.logoBox}>A logo</div>
+          <h1 className={s.title}>Secure your assets.</h1>
+          <div className={s.walletSelectorWrapper}>
             <WalletSelector />
           </div>
         </div>
@@ -46,19 +44,22 @@ export function MainNavigator() {
     );
   }
 
-  if (profileStatus === "loading") return <div className="p-10 text-center animate-pulse">Syncing Profile...</div>;
+  // SCREEN 2: LOADING
+  if (profileStatus === "loading") {
+    return <div className={s.loadingText}>Syncing Profile...</div>;
+  }
 
-  // 2. ONBOARDING (Connected but no profile)
+  // SCREEN 3: ONBOARDING
   if (profileStatus === "no_profile") {
     return <Onboarding onComplete={() => setProfileStatus("exists")} />;
   }
 
-  // 3. HOMEPAGE (Connected and Profile Exists)
+  // SCREEN 4: AUTHENTICATED LAYOUT
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className={s.pageWrapper}>
       <Navbar address={account?.address.toString() || ""} />
-      <main className="max-w-7xl mx-auto p-6 lg:p-12">
-        <Dashboard address={account?.address.toString() || ""} />
+      <main className={s.contentMain}>
+        <Outlet />
       </main>
     </div>
   );

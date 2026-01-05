@@ -34,16 +34,16 @@ export function ProfilePage() {
   };
 
   return (
-    <div className={s.container}>
-      <h2 className={s.title}>Profile Settings</h2>
-      <div className={s.formStack}>
+    <div style={s.container}>
+      <h2 style={s.title}>Profile Settings</h2>
+      <div style={s.formStack}>
         {/* Avatar / PFP Section */}
-        <div className={s.avatarSection}>
-          <div className={s.avatarBox}>
-            {form.pfp && <img src={form.pfp} className={s.avatarImg} alt="Profile" />}
+        <div style={s.avatarSection}>
+          <div style={s.avatarBox}>
+            {form.pfp && <img src={form.pfp} style={s.avatarImg} alt="Profile" />}
           </div>
           <input 
-            className={s.pfpInput} 
+            style={s.pfpInput} 
             placeholder="PFP URL" 
             value={form.pfp} 
             onChange={e => setForm({...form, pfp: e.target.value})} 
@@ -52,7 +52,7 @@ export function ProfilePage() {
 
         {/* Nickname Input */}
         <input 
-          className={s.input} 
+          style={s.input} 
           placeholder="Nickname" 
           value={form.nickname} 
           onChange={e => setForm({...form, nickname: e.target.value})} 
@@ -60,18 +60,18 @@ export function ProfilePage() {
 
         {/* Bio Textarea */}
         <textarea 
-          className={s.textarea} 
+          style={s.textarea} 
           placeholder="Bio" 
           value={form.bio} 
           onChange={e => setForm({...form, bio: e.target.value})} 
         />
 
         {/* Submit Action */}
-        <button onClick={handleUpdate} className={s.submitBtn}>
+        <button onClick={handleUpdate} style={s.submitBtn}>
           Save Changes
         </button>
 
-        {status && <p className={s.statusText}>{status}</p>}
+        {status && <p style={s.statusText}>{status}</p>}
       </div>
     </div>
   );

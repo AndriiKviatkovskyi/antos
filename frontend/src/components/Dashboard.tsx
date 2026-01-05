@@ -31,11 +31,11 @@ export function Dashboard() {
   }, [addressStr]);
 
   return (
-    <div className={s.card}>
-      <h3 className={s.label}>Devnet Balance</h3>
-      <p className={s.balanceText}>
+    <div style={s.card}>
+      <h3 style={s.label}>Devnet Balance</h3>
+      <p style={s.balanceText}>
         {balance}
-        <span className={s.unit}>APT</span>
+        <span style={s.unit}>APT</span>
       </p>
     </div>
   );

@@ -27,31 +27,35 @@ export function Navbar({ address }: { address: string }) {
 
   // Helper to determine active link styling
   const getLinkStyle = (path: string) => {
-    const stateStyle = location.pathname === path ? s.linkActive : s.linkInactive;
-    return `${s.linkBase} ${stateStyle}`;
+  const isActive = location.pathname === path;
+  
+  return {
+    ...s.linkBase,
+    ...(isActive ? s.linkActive : s.linkInactive)
+  };
   };
 
   return (
-    <nav className={s.wrapper}>
-      <div className={s.container}>
-        <div className={s.leftSection}>
-          <Link to="/" className={s.logo}>LOGO</Link>
+    <nav style={s.wrapper}>
+      <div style={s.container}>
+        <div style={s.leftSection}>
+          <Link to="/" style={s.logo}>LOGO</Link>
           
-          <div className={s.linkGroup}>
-            <Link to="/myprofile" className={getLinkStyle("/myprofile")}>
+          <div style={s.linkGroup}>
+            <Link to="/myprofile" style={getLinkStyle("/myprofile")}>
               My Profile
             </Link>
-            <span className={s.linkDisabled}>My Wallets</span>
-            <span className={s.linkDisabled}>Charity</span>
+            <span style={s.linkDisabled}>My Wallets</span>
+            <span style={s.linkDisabled}>Charity</span>
           </div>
         </div>
 
-        <div className={s.rightSection}>
-          <div className={s.balanceBadge}>
+        <div style={s.rightSection}>
+          <div style={s.balanceBadge}>
             {balance} APT
           </div>
           
-          <button onClick={disconnect} className={s.logoutBtn}>
+          <button onClick={disconnect} style={s.logoutBtn}>
             <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
             </svg>

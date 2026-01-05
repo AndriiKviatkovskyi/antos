@@ -44,25 +44,25 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   };
 
   return (
-    <div className={s.container}>
-      <div className={s.card}>
-        <h2 className={s.title}>Create Profile</h2>
-        <p className={s.subtitle}>Tell the world who you are on-chain.</p>
+    <div style={s.container}>
+      <div style={s.card}>
+        <h2 style={s.title}>Create Profile</h2>
+        <p style={s.subtitle}>Tell the world who you are on-chain.</p>
         
-        <div className={s.formStack}>
+        <div style={s.formStack}>
           <div>
-            <label className={s.label}>Nickname *</label>
+            <label style={s.label}>Nickname *</label>
             <input 
-              className={s.input} 
+              style={s.input} 
               placeholder="Vitalik"
               value={form.nickname}
               onChange={(e) => setForm({...form, nickname: e.target.value})}
             />
           </div>
           <div>
-            <label className={s.label}>Bio (Optional)</label>
+            <label style={s.label}>Bio (Optional)</label>
             <textarea 
-              className={s.input} 
+              style={s.input} 
               placeholder="Building the future..."
               value={form.bio}
               onChange={(e) => setForm({...form, bio: e.target.value})}
@@ -70,9 +70,9 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
           </div>
         </div>
 
-        {error && <p className={s.errorText}>{error}</p>}
+        {error && <p style={s.errorText}>{error}</p>}
         
-        <button onClick={handleRegister} className={s.submitBtn}>
+        <button onClick={handleRegister} style={s.submitBtn}>
           Sign & Create
         </button>
       </div>

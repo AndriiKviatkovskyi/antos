@@ -32,11 +32,11 @@ export function MainNavigator() {
   // SCREEN 1: DISCONNECTED
   if (!connected) {
     return (
-      <div className={s.welcomeWrapper}>
-        <div className={s.welcomeContainer}>
-          <div className={s.logoBox}>A logo</div>
-          <h1 className={s.title}>Secure your assets.</h1>
-          <div className={s.walletSelectorWrapper}>
+      <div style={s.welcomeWrapper}>
+        <div style={s.welcomeContainer}>
+          <div style={s.logoBox}>A logo</div>
+          <h1 style={s.title}>Secure your assets.</h1>
+          <div style={s.walletSelectorWrapper}>
             <WalletSelector />
           </div>
         </div>
@@ -46,7 +46,7 @@ export function MainNavigator() {
 
   // SCREEN 2: LOADING
   if (profileStatus === "loading") {
-    return <div className={s.loadingText}>Syncing Profile...</div>;
+    return <div style={s.loadingText}>Syncing Profile...</div>;
   }
 
   // SCREEN 3: ONBOARDING
@@ -56,9 +56,9 @@ export function MainNavigator() {
 
   // SCREEN 4: AUTHENTICATED LAYOUT
   return (
-    <div className={s.pageWrapper}>
+    <div style={s.pageWrapper}>
       <Navbar address={account?.address.toString() || ""} />
-      <main className={s.contentMain}>
+      <main style={s.contentMain}>
         <Outlet />
       </main>
     </div>

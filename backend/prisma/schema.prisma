@@ -21,3 +21,51 @@ model User {
   pfp       String?
   createdAt DateTime @default(now())
 }
+
+model InitializeEvent {
+  id            String   @id @default(uuid())
+  walletAddress String
+  action        String   // "INITIALIZED" or "INITIALIZED_CHARITY"
+  admin         String
+  version       BigInt   @unique // Blockchain block/transaction version to prevent duplicates
+  timestamp     DateTime @default(now())
+}
+
+model MembershipEvent {
+  id            String   @id @default(uuid())
+  walletAddress String
+  action        String   // "JOINED" or "REMOVED"
+  member        String
+  actor         String
+  version       BigInt   @unique
+  timestamp     DateTime @default(now())
+}
+
+model InviteEvent {
+  id            String   @id @default(uuid())
+  walletAddress String
+  action        String   // "SENT", "ACCEPTED", "REJECTED"
+  invitee       String
+  actor         String
+  version       BigInt   @unique
+  timestamp     DateTime @default(now())
+}
+
+model ProposalEvent {
+  id            String   @id @default(uuid())
+  walletAddress String
+  proposalId    BigInt
+  action        String   // "CREATED", "APPROVED", "EXECUTED", "VETOED"
+  actor         String
+  version       BigInt   @unique
+  timestamp     DateTime @default(now())
+}
+
+model GovernanceEvent {
+  id            String   @id @default(uuid())
+  walletAddress String
+  action        String   // "LIMIT_UPDATE", "CONFIG_UPDATE", etc.
+  actor         String
+  version       BigInt   @unique
+  timestamp     DateTime @default(now())
+}

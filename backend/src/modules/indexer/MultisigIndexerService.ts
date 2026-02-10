@@ -6,34 +6,34 @@ dotenv.config();
 
 const { NODE_URL, CONTRACT_ADDRESS, POLL_INTERVAL_MS = 3000 } = process.env;
 
-// Map event types to their exact on-chain struct tag and event field name
+// Mapping each event type to the ModuleEvents resource and the EventHandle field
 const eventMapping: Record<
   string,
   { structTag: string; fieldName: string }
 > = {
   MembershipEvent: {
-    structTag: `${CONTRACT_ADDRESS}::multisig::MembershipEvent`,
-    fieldName: "events",
+    structTag: `${CONTRACT_ADDRESS}::multisig::ModuleEvents`,
+    fieldName: "membership_events",
   },
   InviteEvent: {
-    structTag: `${CONTRACT_ADDRESS}::multisig::InviteEvent`,
-    fieldName: "events",
+    structTag: `${CONTRACT_ADDRESS}::multisig::ModuleEvents`,
+    fieldName: "invite_events",
   },
   InitializeEvent: {
-    structTag: `${CONTRACT_ADDRESS}::multisig::InitializeEvent`,
-    fieldName: "events",
+    structTag: `${CONTRACT_ADDRESS}::multisig::ModuleEvents`,
+    fieldName: "initialize_events",
   },
   ProposalEvent: {
-    structTag: `${CONTRACT_ADDRESS}::multisig::ProposalEvent`,
-    fieldName: "events",
+    structTag: `${CONTRACT_ADDRESS}::multisig::ModuleEvents`,
+    fieldName: "proposal_events",
   },
   GovernanceEvent: {
-    structTag: `${CONTRACT_ADDRESS}::multisig::GovernanceEvent`,
-    fieldName: "events",
+    structTag: `${CONTRACT_ADDRESS}::multisig::ModuleEvents`,
+    fieldName: "governance_events",
   },
 };
 
-// Track last processed version per event type
+// Track last processed version per event type to avoid duplicates
 const lastVersions: Record<string, bigint> = {
   MembershipEvent: BigInt(0),
   InviteEvent: BigInt(0),
@@ -69,11 +69,17 @@ export class MultisigIndexerService {
       const resp = await axios.get(url);
       const events: any[] = resp.data;
 
+      if (!events.length) {
+        console.log(`[indexer] No events yet for ${eventType}`);
+        return;
+      }
+
       for (const e of events) {
         const version = BigInt(e.version);
-        if (lastVersions[eventType])
+        if(lastVersions[eventType])
         if (version <= lastVersions[eventType]) continue;
 
+        // Call the correct save method
         switch (eventType) {
           case "MembershipEvent":
             await this.saveMembership(e);
@@ -92,7 +98,8 @@ export class MultisigIndexerService {
             break;
         }
 
-        if (lastVersions[eventType])
+        // Update last processed version
+        if(lastVersions[eventType])
         if (version > lastVersions[eventType]) lastVersions[eventType] = version;
       }
     } catch (err: any) {

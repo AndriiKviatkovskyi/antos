@@ -23,6 +23,7 @@
     "@aptos-labs/ts-sdk": "^5.2.0",
     "@prisma/adapter-pg": "^7.2.0",
     "@prisma/client": "^6.19.1",
+    "axios": "^1.13.5",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "pg": "^8.16.3",

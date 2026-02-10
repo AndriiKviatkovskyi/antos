@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import userRoutes from "./modules/user/user.routes.js";
+import { MultisigIndexerService } from "./modules/indexer/MultisigIndexerService.js";
 
 const app = express();
 app.use(cors());
@@ -12,6 +13,16 @@ app.get("/health", (_, res) => {
   res.json({ status: "ok" });
 });
 
-app.listen(3001, () => {
-  console.log("Backend running on http://localhost:3001");
+const PORT = 3001;
+
+app.listen(PORT, async () => {
+  console.log(`Backend running on http://localhost:${PORT}`);
+
+  try {
+    const indexer = new MultisigIndexerService();
+    indexer.startPolling();
+    console.log("📡 Multisig indexer started");
+  } catch (err) {
+    console.error("❌ Failed to start indexer", err);
+  }
 });

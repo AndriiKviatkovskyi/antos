@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { profileStyles as s } from "../styles/componentStyles";
+import { API_BASE } from "../constants";
 
 export function ProfilePage() {
   const { account } = useWallet();
@@ -9,7 +10,7 @@ export function ProfilePage() {
 
   useEffect(() => {
     if (account) {
-      fetch(`http://localhost:3001/api/user/${account.address}`)
+      fetch(`${API_BASE}/user/${account.address}`)
         .then(res => res.json())
         .then(data => setForm({
           nickname: data.nickname || "",
@@ -22,7 +23,7 @@ export function ProfilePage() {
   const handleUpdate = async () => {
     setStatus("Saving...");
     try {
-      const res = await fetch(`http://localhost:3001/api/user/${account?.address}`, {
+      const res = await fetch(`${API_BASE}/user/${account?.address}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),

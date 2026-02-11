@@ -70,7 +70,7 @@ export class MultisigIndexerService {
       const events: any[] = resp.data;
 
       if (!events.length) {
-        console.log(`[indexer] No events yet for ${eventType}`);
+        //console.log(`[indexer] No events yet for ${eventType}`);
         return;
       }
 
@@ -104,7 +104,7 @@ export class MultisigIndexerService {
       }
     } catch (err: any) {
       if (err.response?.status === 404) {
-        console.warn(`[indexer] No events yet for ${eventType}`);
+        //console.warn(`[indexer] No events yet for ${eventType}`);
         return;
       }
       console.error(`[indexer] fetch error for ${eventType}:`, err.message);

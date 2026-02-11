@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { onboardingStyles as s } from "../styles/componentStyles";
+import { API_BASE } from "../constants";
 
 export function Onboarding({ onComplete }: { onComplete: () => void }) {
   const { account, signMessage } = useWallet();
@@ -23,7 +24,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
         .map(b => b.toString(16).padStart(2, '0'))
         .join('');
 
-      const res = await fetch("http://localhost:3001/api/user", {
+      const res = await fetch(`${API_BASE}/user`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

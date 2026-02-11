@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import userRoutes from "./modules/user/user.routes.js";
+import eventRoutes from "./modules/event/event.routes.js";
 import { MultisigIndexerService } from "./modules/indexer/MultisigIndexerService.js";
 
 const app = express();
@@ -8,6 +9,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/api/user", userRoutes);
+app.use("/api/event", eventRoutes);
 
 app.get("/health", (_, res) => {
   res.json({ status: "ok" });

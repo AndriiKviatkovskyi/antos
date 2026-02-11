@@ -5,6 +5,7 @@ import { Onboarding } from "./Onboarding";
 import { Navbar } from "./Navbar";
 import { WalletSelector } from "@aptos-labs/wallet-adapter-ant-design";
 import { mainStyles as s } from "../styles/componentStyles"; // Importing styles
+import { API_BASE } from "../constants";
 
 export function MainNavigator() {
   const { account, connected } = useWallet();
@@ -18,7 +19,7 @@ export function MainNavigator() {
 
     const checkProfile = async () => {
       try {
-        const res = await fetch(`http://localhost:3001/api/user/${account?.address}`);
+        const res = await fetch(`${API_BASE}/user/${account?.address}`);
         if (res.ok) setProfileStatus("exists");
         else setProfileStatus("no_profile");
       } catch {

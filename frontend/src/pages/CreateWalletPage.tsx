@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+import type { InputEntryFunctionData } from "@aptos-labs/ts-sdk";
 import { profileStyles as s } from "../styles/componentStyles";
 import { MULTISIG_MODULE } from "../constants";
 
@@ -47,49 +48,47 @@ export function CreateWalletPage() {
 
       const seedBytes = new TextEncoder().encode(seed);
 
-      let payload;
+      // --- Correct payload ---
+      let payload: InputEntryFunctionData;
 
       if (!expanded) {
         payload = {
-          data: {
-            function: `${MULTISIG_MODULE}::initialize`,
-            typeArguments: [],
-            functionArguments: [
-              Array.from(seedBytes),
-              Number(maxOwners),
-              isCharity,
-              isCharity ? toNumberOrMinusOne(entryFee) : 0,
-              isCharity ? toNumberOrMinusOne(monthlyFee) : 0,
-            ],
-          },
+          function: `${MULTISIG_MODULE}::initialize`,
+          typeArguments: [],
+          functionArguments: [
+            Array.from(seedBytes),
+            Number(maxOwners),
+            isCharity,
+            isCharity ? toNumberOrMinusOne(entryFee) : 0,
+            isCharity ? toNumberOrMinusOne(monthlyFee) : 0,
+          ],
         };
       } else {
         payload = {
-          data: {
-            function: `${MULTISIG_MODULE}::initialize_custom`,
-            typeArguments: [],
-            functionArguments: [
-              Array.from(seedBytes),
-              Number(maxOwners),
-              isCharity,
-              isCharity ? toNumberOrMinusOne(entryFee) : 0,
-              isCharity ? toNumberOrMinusOne(monthlyFee) : 0,
-              onlyAdminsInitiate,
-              onlyAdminsVote,
-              adminsCanVeto,
-              Number(votingMode),
-              votingMode === 4 ? toNumberOrMinusOne(tierTwo) : 0,
-              votingMode === 4 ? toNumberOrMinusOne(tierThree) : 0,
-              toNumberOrMinusOne(dailyLimit),
-              toNumberOrMinusOne(weeklyLimit),
-              toNumberOrMinusOne(monthlyLimit),
-              filterWhitelist,
-            ],
-          },
+          function: `${MULTISIG_MODULE}::initialize_custom`,
+          typeArguments: [],
+          functionArguments: [
+            Array.from(seedBytes),
+            Number(maxOwners),
+            isCharity,
+            isCharity ? toNumberOrMinusOne(entryFee) : 0,
+            isCharity ? toNumberOrMinusOne(monthlyFee) : 0,
+            onlyAdminsInitiate,
+            onlyAdminsVote,
+            adminsCanVeto,
+            Number(votingMode),
+            votingMode === 4 ? toNumberOrMinusOne(tierTwo) : 0,
+            votingMode === 4 ? toNumberOrMinusOne(tierThree) : 0,
+            toNumberOrMinusOne(dailyLimit),
+            toNumberOrMinusOne(weeklyLimit),
+            toNumberOrMinusOne(monthlyLimit),
+            filterWhitelist,
+          ],
         };
       }
 
-      const response = await signAndSubmitTransaction(payload);
+      // --- Pass payload correctly ---
+      const response = await signAndSubmitTransaction({ data: payload });
 
       await aptos.waitForTransaction({
         transactionHash: response.hash,
@@ -107,7 +106,6 @@ export function CreateWalletPage() {
       <h2 style={s.title}>Create Multisig Wallet</h2>
 
       <div style={s.formStack}>
-
         <label>
           Wallet Name (Seed)
           <input

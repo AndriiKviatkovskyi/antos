@@ -34,7 +34,7 @@ export function CreateWalletPage() {
   const [filterWhitelist, setFilterWhitelist] = useState(false);
 
   const toNumberOrMinusOne = (val: string) =>
-    val === "" ? -1 : Number(val);
+    val === "" ? 0 : Number(val);
 
   const handleSubmit = async () => {
     if (!account) {
@@ -58,8 +58,8 @@ export function CreateWalletPage() {
               Array.from(seedBytes),
               Number(maxOwners),
               isCharity,
-              isCharity ? toNumberOrMinusOne(entryFee) : -1,
-              isCharity ? toNumberOrMinusOne(monthlyFee) : -1,
+              isCharity ? toNumberOrMinusOne(entryFee) : 0,
+              isCharity ? toNumberOrMinusOne(monthlyFee) : 0,
             ],
           },
         };
@@ -72,14 +72,14 @@ export function CreateWalletPage() {
               Array.from(seedBytes),
               Number(maxOwners),
               isCharity,
-              isCharity ? toNumberOrMinusOne(entryFee) : -1,
-              isCharity ? toNumberOrMinusOne(monthlyFee) : -1,
+              isCharity ? toNumberOrMinusOne(entryFee) : 0,
+              isCharity ? toNumberOrMinusOne(monthlyFee) : 0,
               onlyAdminsInitiate,
               onlyAdminsVote,
               adminsCanVeto,
               Number(votingMode),
-              votingMode === 4 ? toNumberOrMinusOne(tierTwo) : -1,
-              votingMode === 4 ? toNumberOrMinusOne(tierThree) : -1,
+              votingMode === 4 ? toNumberOrMinusOne(tierTwo) : 0,
+              votingMode === 4 ? toNumberOrMinusOne(tierThree) : 0,
               toNumberOrMinusOne(dailyLimit),
               toNumberOrMinusOne(weeklyLimit),
               toNumberOrMinusOne(monthlyLimit),

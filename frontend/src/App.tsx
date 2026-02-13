@@ -4,6 +4,7 @@ import { MainNavigator } from "./components/MainNavigator";
 import { Dashboard } from "./components/Dashboard.js";
 import { ProfilePage } from "./pages/ProfilePage.js";
 import { MyWalletsPage } from "./pages/MyWalletsPage.js";
+import { CreateWalletPage } from "./pages/CreateWalletPage.js";
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="myprofile" element={<ProfilePage />} />
             <Route path="mywallets" element={<MyWalletsPage />} />
+            <Route path="createwallet" element={<CreateWalletPage />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Route>
         </Routes>

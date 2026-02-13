@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { profileStyles as s } from "../styles/componentStyles"; // reuse styles
 import { API_BASE } from "../constants";
+import { useNavigate } from "react-router-dom";
 
 export function MyWalletsPage() {
   const { account } = useWallet();
   const [wallets, setWallets] = useState<string[]>([]);
   const [status, setStatus] = useState("Loading...");
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!account) {
@@ -45,6 +47,12 @@ export function MyWalletsPage() {
             {wallets.map(wallet => (
               <li key={wallet} style={s.statusText}>
                 {wallet}
+                <button
+                  style={{ marginLeft: 10 }}
+                  onClick={() => navigate(`/wallet/${wallet}`)}
+                >
+                  Open
+                </button>
               </li>
             ))}
           </ul>

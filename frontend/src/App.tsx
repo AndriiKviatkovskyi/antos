@@ -5,6 +5,7 @@ import { Dashboard } from "./components/Dashboard.js";
 import { ProfilePage } from "./pages/ProfilePage.js";
 import { MyWalletsPage } from "./pages/MyWalletsPage.js";
 import { CreateWalletPage } from "./pages/CreateWalletPage.js";
+import { WalletDetailsPage } from "./pages/WalletDetailsPage.js";
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
             <Route path="myprofile" element={<ProfilePage />} />
             <Route path="mywallets" element={<MyWalletsPage />} />
             <Route path="createwallet" element={<CreateWalletPage />} />
+            <Route path="/wallet/:address" element={<WalletDetailsPage />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Route>
         </Routes>

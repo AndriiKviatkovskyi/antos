@@ -20,9 +20,22 @@ function hexToString(hex: string): string {
   }
 }
 
+interface WalletInfo {
+  name: string;
+  owners: string[];
+  admins: string[];
+  balance: string;
+  is_charity: boolean;
+  entry_fee: string;
+  monthly_fee: string;
+  voting_mode: number;
+  recipient_filter_is_whitelist: boolean;
+}
+
 export function WalletDetailsPage() {
   const { address } = useParams<{ address: string }>();
   const [resourceData, setResourceData] = useState<any | null>(null);
+  const [aptBalance, setAptBalance] = useState<string | null>(null);
   const [status, setStatus] = useState("Loading...");
 
   useEffect(() => {
@@ -32,26 +45,39 @@ export function WalletDetailsPage() {
       try {
         setStatus("Loading...");
 
+        // 1️⃣ MultisigStore
         const resource = await aptos.getAccountResource({
           accountAddress: address,
           resourceType: `${MULTISIG_MODULE}::MultisigStore` as const,
         });
 
-        
-
         const data = resource;
 
-        // Якщо є name у форматі hex, конвертуємо
-        console.log(data);
+        // Конвертуємо name з hex, якщо він є
         if (data.name) {
           data.name = hexToString(data.name);
         }
 
         setResourceData(data);
+        try {
+          const response = await aptos.view({
+            payload: {
+                function: `${MULTISIG_MODULE}::get_wallet_info`,
+                typeArguments: [],
+                functionArguments: [address],
+            },
+          });
+
+          const rawData = response[0] as WalletInfo;
+          setAptBalance(rawData.balance);
+        } catch {
+          setAptBalance("0");
+        }
+
         setStatus("");
       } catch (e) {
         console.error(e);
-        setStatus("Failed to fetch wallet resource.");
+        setStatus("Failed to fetch wallet data.");
       }
     };
 
@@ -65,9 +91,15 @@ export function WalletDetailsPage() {
       {status && <p style={s.statusText}>{status}</p>}
 
       {resourceData && (
-        <pre style={{ ...s.formStack, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-          {JSON.stringify(resourceData, null, 2)}
-        </pre>
+        <>
+          <pre style={{ ...s.formStack, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            {JSON.stringify(resourceData, null, 2)}
+          </pre>
+
+          <div style={{ ...s.formStack, marginTop: "1rem" }}>
+            <strong>APT Balance:</strong> {aptBalance !== null ? `${aptBalance} (in ℓApt)` : "N/A"}
+          </div>
+        </>
       )}
     </div>
   );

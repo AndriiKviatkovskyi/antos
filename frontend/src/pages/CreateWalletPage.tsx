@@ -5,7 +5,7 @@ import { profileStyles as s } from "../styles/componentStyles";
 import { MULTISIG_MODULE } from "../constants";
 
 const aptos = new Aptos(
-  new AptosConfig({ network: Network.DEVNET })
+  new AptosConfig({ network: Network.TESTNET })
 );
 
 export function CreateWalletPage() {

@@ -4,7 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Aptos, AptosConfig, Network, AccountAddress } from "@aptos-labs/ts-sdk";
 import { navStyles as s } from "../styles/componentStyles";
 
-const aptos = new Aptos(new AptosConfig({ network: Network.DEVNET }));
+const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
 
 export function Navbar({ address }: { address: string }) {
   const { disconnect } = useWallet();
@@ -49,7 +49,7 @@ export function Navbar({ address }: { address: string }) {
               My Wallets
             </Link>
             <Link to="/createwallet" style={getLinkStyle("/createwallet")}>
-              My Wallets
+              Create Wallet
             </Link>
             <span style={s.linkDisabled}>Charity</span>
           </div>

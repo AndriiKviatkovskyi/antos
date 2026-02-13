@@ -3,7 +3,7 @@ import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { Aptos, AptosConfig, Network, AccountAddress } from "@aptos-labs/ts-sdk";
 import { dashboardStyles as s } from "../styles/componentStyles";
 
-const config = new AptosConfig({ network: Network.DEVNET });
+const config = new AptosConfig({ network: Network.TESTNET });
 const aptos = new Aptos(config);
 
 export function Dashboard() {

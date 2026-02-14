@@ -65,3 +65,28 @@ export const profileStyles = {
   submitBtn: { width: '100%', backgroundColor: '#0f172a', color: 'white', fontWeight: 900, padding: '20px', borderRadius: '16px', border: 'none', cursor: 'pointer', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' },
   statusText: { textAlign: 'center' as const, fontSize: '14px', fontWeight: 900, color: '#2563eb', marginTop: '16px' }
 };
+
+export const walletStyles = {
+  container: { width: '100%', maxWidth: '672px', margin: '0 auto', padding: '48px' },
+  
+  walletBox: { width: '100%', borderRadius: '24px', overflow: 'hidden', border: '1px solid #f1f5f9', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' },
+  
+  walletHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', color: 'white' },
+  walletHeaderNormal: { backgroundColor: '#1976d2' },   
+  walletHeaderCharity: { backgroundColor: '#2e7d32' },  
+  walletHeaderLeft: { display: 'flex', flexDirection: 'column' as const },
+  walletName: { fontSize: '18px', fontWeight: 600 },
+  walletAddress: { fontSize: '14px', opacity: 0.9, marginTop: '4px', wordBreak: 'break-all' as const },
+  walletCharityBadge: { fontSize: '12px', fontWeight: 700, backgroundColor: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '12px' },
+  
+  walletBody: { padding: '16px', fontSize: '16px', fontWeight: 600 },
+  balanceRow: { marginBottom: '16px' },
+
+  ownersSection: { marginTop: '16px', borderTop: '1px solid #f1f5f9', paddingTop: '8px' },
+  ownersHeader: { fontWeight: 700, cursor: 'pointer', userSelect: 'none', marginBottom: '8px' },
+  ownersList: { listStyle: 'none', paddingLeft: '16px', margin: 0 },
+  ownerItem: { marginBottom: '4px', wordBreak: 'break-all' as const },
+  adminStar: { color: '#f59e0b', marginLeft: '4px' },
+
+  statusText: { textAlign: 'center' as const, fontSize: '14px', fontWeight: 900, color: '#2563eb', marginTop: '16px' }
+};

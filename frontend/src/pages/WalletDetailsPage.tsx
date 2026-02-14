@@ -1,22 +1,24 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
-import { profileStyles as s } from "../styles/componentStyles";
+import { walletStyles as s } from "../styles/componentStyles";
 import { MULTISIG_MODULE } from "../constants";
 
 const aptos = new Aptos(
   new AptosConfig({ network: Network.TESTNET })
 );
 
-// 🔥 Конвертація hex (0x...) → string
+// Convert hex → string
 function hexToString(hex: string): string {
   try {
     const cleanHex = hex.startsWith("0x") ? hex.slice(2) : hex;
     if (cleanHex.length === 0) return "";
-    const bytes = new Uint8Array(cleanHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+    const bytes = new Uint8Array(
+      cleanHex.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
+    );
     return new TextDecoder().decode(bytes);
   } catch {
-    return hex; // fallback
+    return hex;
   }
 }
 
@@ -34,44 +36,48 @@ interface WalletInfo {
 
 export function WalletDetailsPage() {
   const { address } = useParams<{ address: string }>();
-  const [resourceData, setResourceData] = useState<any | null>(null);
-  const [aptBalance, setAptBalance] = useState<string | null>(null);
+  const [walletData, setWalletData] = useState<any | null>(null);
+  const [balance, setBalance] = useState<string | null>(null);
   const [status, setStatus] = useState("Loading...");
+  const [ownersVisible, setOwnersVisible] = useState(false);
+
+  function formatApt(octas: string | number): string {
+    const apt = Number(octas) / 100_000_000; // 1 APT = 100_000_000 octas
+    return apt.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 3 });
+  }
 
   useEffect(() => {
     if (!address) return;
 
-    const fetchResource = async () => {
+    const fetchData = async () => {
       try {
         setStatus("Loading...");
 
-        // 1️⃣ MultisigStore
+        // 1️⃣ Fetch MultisigStore resource
         const resource = await aptos.getAccountResource({
           accountAddress: address,
           resourceType: `${MULTISIG_MODULE}::MultisigStore` as const,
         });
 
         const data = resource;
+        if (data.name) data.name = hexToString(data.name);
 
-        // Конвертуємо name з hex, якщо він є
-        if (data.name) {
-          data.name = hexToString(data.name);
-        }
+        setWalletData(data);
 
-        setResourceData(data);
+        // 2️⃣ Fetch wallet info (balance)
         try {
           const response = await aptos.view({
             payload: {
-                function: `${MULTISIG_MODULE}::get_wallet_info`,
-                typeArguments: [],
-                functionArguments: [address],
+              function: `${MULTISIG_MODULE}::get_wallet_info`,
+              typeArguments: [],
+              functionArguments: [address],
             },
           });
 
           const rawData = response[0] as WalletInfo;
-          setAptBalance(rawData.balance);
+          setBalance(rawData.balance);
         } catch {
-          setAptBalance("0");
+          setBalance("0");
         }
 
         setStatus("");
@@ -81,25 +87,49 @@ export function WalletDetailsPage() {
       }
     };
 
-    fetchResource();
+    fetchData();
   }, [address]);
+
+  const toggleOwners = () => setOwnersVisible(!ownersVisible);
 
   return (
     <div style={s.container}>
-      <h2 style={s.title}>Wallet Details</h2>
-
       {status && <p style={s.statusText}>{status}</p>}
 
-      {resourceData && (
-        <>
-          <pre style={{ ...s.formStack, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-            {JSON.stringify(resourceData, null, 2)}
-          </pre>
-
-          <div style={{ ...s.formStack, marginTop: "1rem" }}>
-            <strong>APT Balance:</strong> {aptBalance !== null ? `${aptBalance} (in ℓApt)` : "N/A"}
+      {walletData && (
+        <div style={s.walletBox}>
+          <div
+            style={{
+              ...s.walletHeader,
+              ...(walletData.is_charity ? s.walletHeaderCharity : s.walletHeaderNormal)
+            }}
+          >
+            <div style={s.walletHeaderLeft}>
+              <span style={s.walletName}>{walletData.name || "Unnamed Wallet"}</span>
+              <span style={s.walletAddress}>{address}</span>
+            </div>
+            {walletData.is_charity && <span style={s.walletCharityBadge}>Charity</span>}
           </div>
-        </>
+
+          <div style={s.walletBody}>
+            <div style={s.balanceRow}>APT Balance: {balance !== null ? `${formatApt(balance)} APT` : "N/A"}</div>
+
+            <div style={s.ownersSection}>
+              <div style={s.ownersHeader} onClick={toggleOwners}>
+                Owners {ownersVisible ? "▲" : "▼"}
+              </div>
+              {ownersVisible && (
+                <ul style={s.ownersList}>
+                  {walletData.owners.map((owner: string) => (
+                    <li key={owner} style={s.ownerItem}>
+                      {owner} {walletData.admins.includes(owner) && <span style={s.adminStar}>★</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

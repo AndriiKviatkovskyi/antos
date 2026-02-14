@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { profileStyles as s } from "../styles/componentStyles";
-import { API_BASE } from "../constants";
+import { API_BASE, MULTISIG_MODULE } from "../constants";
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+import type { InputEntryFunctionData } from "@aptos-labs/ts-sdk";
 
 type Invite = {
   walletAddress: string;
@@ -10,9 +12,13 @@ type Invite = {
 };
 
 export function InvitesPage() {
-  const { account } = useWallet();
+  const { account, signAndSubmitTransaction } = useWallet();
   const [invites, setInvites] = useState<Invite[]>([]);
   const [status, setStatus] = useState("Loading...");
+
+  const aptos = new Aptos(
+    new AptosConfig({ network: Network.TESTNET })
+  );
 
   useEffect(() => {
     if (!account) {
@@ -73,18 +79,77 @@ export function InvitesPage() {
                 <div style={{ marginTop: 6 }}>
                   <button
                     style={{ marginRight: 8 }}
-                    onClick={() => {
-                      // TODO: implement accept logic
-                      console.log("Accepted invite:", invite.walletAddress);
+                    onClick={async () => {
+                      if (!account) return;
+
+                      try {
+                        setStatus("Submitting transaction...");
+
+                        const payload: InputEntryFunctionData = {
+                          function: `${MULTISIG_MODULE}::respond_to_invitation`,
+                          typeArguments: [],
+                          functionArguments: [
+                            invite.walletAddress,
+                            true, // accept
+                          ],
+                        };
+
+                        const response = await signAndSubmitTransaction({
+                          data: payload,
+                        });
+
+                        await aptos.waitForTransaction({
+                          transactionHash: response.hash,
+                        });
+
+                        setStatus("Invite accepted.");
+
+                        // Remove invite locally after success
+                        setInvites((prev) =>
+                          prev.filter((i) => i.walletAddress !== invite.walletAddress)
+                        );
+                      } catch (err) {
+                        console.error(err);
+                        setStatus("Transaction failed.");
+                      }
                     }}
                   >
                     Confirm
                   </button>
 
                   <button
-                    onClick={() => {
-                      // TODO: implement reject logic
-                      console.log("Rejected invite:", invite.walletAddress);
+                    onClick={async () => {
+                      if (!account) return;
+
+                      try {
+                        setStatus("Submitting transaction...");
+
+                        const payload: InputEntryFunctionData = {
+                          function: `${MULTISIG_MODULE}::respond_to_invitation`,
+                          typeArguments: [],
+                          functionArguments: [
+                            invite.walletAddress,
+                            false, // reject
+                          ],
+                        };
+
+                        const response = await signAndSubmitTransaction({
+                          data: payload,
+                        });
+
+                        await aptos.waitForTransaction({
+                          transactionHash: response.hash,
+                        });
+
+                        setStatus("Invite rejected.");
+
+                        setInvites((prev) =>
+                          prev.filter((i) => i.walletAddress !== invite.walletAddress)
+                        );
+                      } catch (err) {
+                        console.error(err);
+                        setStatus("Transaction failed.");
+                      }
                     }}
                   >
                     Reject

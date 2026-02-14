@@ -67,51 +67,145 @@ export const profileStyles = {
 };
 
 export const walletStyles = {
-  container: { width: "100%", maxWidth: "100%", margin: "0 auto", padding: "48px" },
+  container: {
+    width: "100%",
+    padding: "48px",
+  },
 
   pageGrid: {
     display: "grid",
-    gridTemplateColumns: "1fr 2fr 1fr", // left, main, right
-    gap: "24px",
+    gridTemplateColumns: "1fr 2fr 1fr",
+    gap: "32px",
     alignItems: "start",
   },
 
   sideBox: {
     backgroundColor: "white",
-    borderRadius: "24px",
-    border: "1px solid #f1f5f9",
-    boxShadow: "0 4px 10px rgba(0,0,0,0.05)",
-    padding: "16px",
+    borderRadius: "20px",
+    padding: "20px",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 6px 20px rgba(0,0,0,0.05)",
   },
-  sideHeader: { fontWeight: 700, fontSize: "16px", marginBottom: "12px" },
-  sideBody: { fontSize: "14px", color: "#475569" },
+
+  sideHeader: {
+    fontWeight: 700,
+    marginBottom: "16px",
+    fontSize: "16px",
+  },
+
+  sideBody: {
+    fontSize: "14px",
+  },
 
   walletBox: {
-    width: "100%",
-    borderRadius: "24px",
+    borderRadius: "20px",
     overflow: "hidden",
-    border: "1px solid #f1f5f9",
-    boxShadow: "0 4px 10px rgba(0,0,0,0.05)",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 6px 20px rgba(0,0,0,0.05)",
   },
 
-  walletHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", color: "white" },
+  walletHeader: {
+    padding: "20px",
+    color: "white",
+  },
+
   walletHeaderNormal: { backgroundColor: "#1976d2" },
   walletHeaderCharity: { backgroundColor: "#2e7d32" },
-  walletHeaderLeft: { display: "flex", flexDirection: "column" as const },
-  walletName: { fontSize: "18px", fontWeight: 600 },
-  walletAddress: { fontSize: "14px", opacity: 0.9, marginTop: "4px", wordBreak: "break-all" as const },
-  walletCharityBadge: { fontSize: "12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.2)", padding: "2px 8px", borderRadius: "12px" },
 
-  walletBody: { padding: "16px", fontSize: "16px", fontWeight: 600 },
-  statusText: { textAlign: "center" as const, fontSize: "14px", fontWeight: 900, color: "#2563eb", marginTop: "16px" },
+  walletName: { fontSize: "18px", fontWeight: 600 },
+  walletAddress: { fontSize: "13px", opacity: 0.9 },
+
+  walletBody: { padding: "20px" },
 
   ownersHeader: {
-    fontWeight: 600,
+    marginTop: "16px",
     cursor: "pointer",
-    marginBottom: "8px",
     userSelect: "none" as const,
+    fontWeight: 600,
   },
-  ownersList: { paddingLeft: "24px", listStyleType: "disc", margin: 0 },
-  ownerItem: { marginBottom: "4px", fontFamily: "monospace", fontSize: "14px" },
-  adminStar: { color: "#f59e0b", marginLeft: "4px" },
+
+  ownersList: {
+    paddingLeft: "20px",
+    marginTop: "8px",
+  },
+
+  ownerItem: {
+    marginBottom: "6px",
+    fontFamily: "monospace",
+    fontSize: "14px",
+  },
+
+  adminStar: {
+    marginLeft: "6px",
+    color: "#f59e0b",
+  },
+
+  primaryButton: {
+    backgroundColor: "#2563eb",
+    color: "white",
+    border: "none",
+    padding: "10px 16px",
+    borderRadius: "8px",
+    cursor: "pointer",
+  },
+
+  secondaryButton: {
+    backgroundColor: "#e2e8f0",
+    border: "none",
+    padding: "10px 16px",
+    borderRadius: "8px",
+    cursor: "pointer",
+  },
+
+  modalOverlay: {
+    position: "fixed" as const,
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0,0,0,0.4)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  modal: {
+    backgroundColor: "white",
+    padding: "24px",
+    borderRadius: "16px",
+    width: "400px",
+  },
+
+  input: {
+    width: "100%",
+    padding: "8px",
+    marginBottom: "12px",
+    borderRadius: "8px",
+    border: "1px solid #cbd5e1",
+  },
+
+  select: {
+    width: "100%",
+    padding: "8px",
+    marginBottom: "12px",
+    borderRadius: "8px",
+    border: "1px solid #cbd5e1",
+  },
+
+  modalButtons: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginTop: "12px",
+  },
+
+  errorText: {
+    color: "red",
+    fontSize: "13px",
+    marginBottom: "8px",
+  },
+
+  statusText: {
+    textAlign: "center" as const,
+    marginBottom: "20px",
+  },
 };

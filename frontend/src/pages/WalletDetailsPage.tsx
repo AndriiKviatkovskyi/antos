@@ -10,7 +10,6 @@ const aptos = new Aptos(
   new AptosConfig({ network: Network.TESTNET })
 );
 
-// Convert hex → string
 function hexToString(hex: string): string {
   try {
     const cleanHex = hex.startsWith("0x") ? hex.slice(2) : hex;
@@ -24,37 +23,30 @@ function hexToString(hex: string): string {
   }
 }
 
-interface WalletInfo {
-  name: string;
-  owners: string[];
-  admins: string[];
-  balance: string;
-  is_charity: boolean;
-  max_owners: number;
-  entry_fee: string;
-  monthly_fee: string;
-  voting_mode: number;
-  recipient_filter_is_whitelist: boolean;
+function bytesToHex(bytes: Uint8Array) {
+  return "0x" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
 export function WalletDetailsPage() {
   const { address } = useParams<{ address: string }>();
-  const { account } = useWallet(); // connected user
-  const currentUser = account?.address;
-  const currentUserHex = currentUser? bytesToHex(currentUser.data) : null;
+  const { account, signAndSubmitTransaction } = useWallet();
+
+  const currentUserHex = account?.address?.data
+    ? bytesToHex(account.address.data)
+    : null;
 
   const [walletData, setWalletData] = useState<any | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
   const [status, setStatus] = useState("Loading...");
   const [showOwners, setShowOwners] = useState(false);
 
-  function formatApt(octas: string | number): string {
-    const apt = Number(octas) / 100_000_000; // 1 APT = 100_000_000 octas
-    return apt.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 3 });
-  }
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteAddress, setInviteAddress] = useState("");
+  const [inviteRole, setInviteRole] = useState<"owner" | "admin">("owner");
 
-  function bytesToHex(bytes: Uint8Array) {
-    return '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  function formatApt(octas: string | number): string {
+    const apt = Number(octas) / 100_000_000;
+    return apt.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 3 });
   }
 
   useEffect(() => {
@@ -64,7 +56,6 @@ export function WalletDetailsPage() {
       try {
         setStatus("Loading...");
 
-        // 1️⃣ Fetch MultisigStore resource
         const resource = await aptos.getAccountResource({
           accountAddress: address,
           resourceType: `${MULTISIG_MODULE}::MultisigStore` as const,
@@ -72,25 +63,17 @@ export function WalletDetailsPage() {
 
         const data = resource;
         if (data.name) data.name = hexToString(data.name);
-
         setWalletData(data);
 
-        // 2️⃣ Fetch wallet info (balance)
-        try {
-          const response = await aptos.view({
-            payload: {
-              function: `${MULTISIG_MODULE}::get_wallet_info`,
-              typeArguments: [],
-              functionArguments: [address],
-            },
-          });
+        const response = await aptos.view({
+          payload: {
+            function: `${MULTISIG_MODULE}::get_wallet_info`,
+            typeArguments: [],
+            functionArguments: [address],
+          },
+        });
 
-          const rawData = response[0] as WalletInfo;
-          setBalance(rawData.balance);
-        } catch {
-          setBalance("0");
-        }
-
+        setBalance((response[0] as any).balance);
         setStatus("");
       } catch (e) {
         console.error(e);
@@ -101,8 +84,42 @@ export function WalletDetailsPage() {
     fetchData();
   }, [address]);
 
-  const isOwner = currentUserHex && walletData?.owners?.includes(currentUserHex);
-  const isAdmin = currentUserHex && walletData?.admins?.includes(currentUserHex);
+  const isOwner =
+    currentUserHex &&
+    walletData?.owners?.some((o: string) => o.toLowerCase() === currentUserHex.toLowerCase());
+
+  const isAdmin =
+    currentUserHex &&
+    walletData?.admins?.some((a: string) => a.toLowerCase() === currentUserHex.toLowerCase());
+
+  const walletFull =
+    walletData &&
+    walletData.owners.length >= walletData.max_owners;
+
+  const isBlacklisted =
+    walletData &&
+    walletData.membership_blacklist?.some(
+      (addr: string) => addr.toLowerCase() === inviteAddress.toLowerCase()
+    );
+
+  async function handleInvite() {
+    if (!address || !inviteAddress) return;
+
+    await signAndSubmitTransaction({
+      sender: account!.address,
+      data: {
+        function: `${MULTISIG_MODULE}::invite_owner`,
+        functionArguments: [
+          address,
+          inviteAddress,
+          inviteRole === "admin",
+        ],
+      },
+    });
+
+    setShowInviteModal(false);
+    setInviteAddress("");
+  }
 
   return (
     <div style={s.container}>
@@ -110,49 +127,49 @@ export function WalletDetailsPage() {
 
       {walletData && (
         <div style={s.pageGrid}>
-          {/* Owner Functions Box */}
+          {/* OWNER BOX */}
           <div style={s.sideBox}>
             <div style={s.sideHeader}>Owner Functions</div>
             <div style={s.sideBody}>
               {isOwner ? (
-                <div>
-                  {/* Your actual owner content goes here */}
-                  <p>Owner-only content</p>
-                </div>
+                <p>Owner-only content</p>
               ) : (
                 <p>Sorry, you're not this wallet's owner</p>
               )}
             </div>
           </div>
 
-          {/* Main Wallet Box */}
+          {/* MAIN WALLET */}
           <div style={s.walletBox}>
             <div
               style={{
                 ...s.walletHeader,
-                ...(walletData.is_charity ? s.walletHeaderCharity : s.walletHeaderNormal),
+                ...(walletData.is_charity
+                  ? s.walletHeaderCharity
+                  : s.walletHeaderNormal),
               }}
             >
-              <div style={s.walletHeaderLeft}>
-                <span style={s.walletName}>{walletData.name || "Unnamed Wallet"}</span>
-                <span style={s.walletAddress}>{address}</span>
+              <div>
+                <div style={s.walletName}>{walletData.name}</div>
+                <div style={s.walletAddress}>{address}</div>
               </div>
-              {walletData.is_charity && <span style={s.walletCharityBadge}>Charity</span>}
             </div>
 
             <div style={s.walletBody}>
-              <div>APT Balance: {balance !== null ? `${formatApt(balance)} APT` : "N/A"}</div>
+              <div>APT Balance: {balance ? `${formatApt(balance)} APT` : "N/A"}</div>
 
-              {/* Owners List */}
               <div style={s.ownersHeader} onClick={() => setShowOwners(!showOwners)}>
-                {showOwners ? "▼" : "▶"} Owners ({walletData.owners?.length || 0} / {walletData.max_owners || 0})
+                {showOwners ? "▼" : "▶"} Owners ({walletData.owners.length} / {walletData.max_owners})
               </div>
 
               {showOwners && (
                 <ul style={s.ownersList}>
-                  {walletData.owners?.map((owner: string) => (
+                  {walletData.owners.map((owner: string) => (
                     <li key={owner} style={s.ownerItem}>
-                      {owner} {walletData.admins?.includes(owner) && <span style={s.adminStar}>★</span>}
+                      {owner}
+                      {walletData.admins.includes(owner) && (
+                        <span style={s.adminStar}>★</span>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -160,19 +177,79 @@ export function WalletDetailsPage() {
             </div>
           </div>
 
-          {/* Admin Functions Box */}
+          {/* ADMIN BOX */}
           <div style={s.sideBox}>
             <div style={s.sideHeader}>Admin Functions</div>
             <div style={s.sideBody}>
               {isAdmin ? (
-                <div>
-                  {/* Your actual admin content goes here */}
-                  <p>Admin-only content</p>
-                </div>
+                <>
+                  <button
+                    style={s.primaryButton}
+                    onClick={() => setShowInviteModal(true)}
+                  >
+                    Invite user
+                  </button>
+                </>
               ) : (
                 <p>Sorry, you're not this wallet's admin</p>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL */}
+      {showInviteModal && (
+        <div style={s.modalOverlay}>
+          <div style={s.modal}>
+            {walletFull ? (
+              <p>Wallet is full</p>
+            ) : (
+              <>
+                <h3>Invite User</h3>
+
+                <input
+                  style={s.input}
+                  placeholder="0x..."
+                  value={inviteAddress}
+                  onChange={(e) => setInviteAddress(e.target.value)}
+                />
+
+                <select
+                  style={s.select}
+                  value={inviteRole}
+                  onChange={(e) =>
+                    setInviteRole(e.target.value as "owner" | "admin")
+                  }
+                >
+                  <option value="owner">Owner</option>
+                  <option value="admin">Admin</option>
+                </select>
+
+                {isBlacklisted && (
+                  <p style={s.errorText}>
+                    Alert! This user is blacklisted from joining the wallet
+                  </p>
+                )}
+
+                <div style={s.modalButtons}>
+                  <button
+                    style={s.primaryButton}
+                    disabled={isBlacklisted}
+                    onClick={handleInvite}
+                  >
+                    Invite
+                  </button>
+
+                  <button
+                    style={s.secondaryButton}
+                    onClick={() => setShowInviteModal(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

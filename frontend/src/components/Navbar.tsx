@@ -51,6 +51,9 @@ export function Navbar({ address }: { address: string }) {
             <Link to="/createwallet" style={getLinkStyle("/createwallet")}>
               Create Wallet
             </Link>
+            <Link to="/invites" style={getLinkStyle("/invites")}>
+              Invites
+            </Link>
             <span style={s.linkDisabled}>Charity</span>
           </div>
         </div>

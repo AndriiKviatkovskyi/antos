@@ -17,4 +17,20 @@ export class EventController {
       return res.status(500).json({ error: "Server error" });
     }
   }
+
+  static async getPendingInvites(req: Request, res: Response) {
+  const { address } = req.params;
+
+  if (!address) {
+    return res.status(400).json({ error: "Address required" });
+  }
+
+  try {
+    const invites = await EventService.getPendingInvitesForUser(address);
+    return res.json(invites);
+  } catch (err) {
+    console.error("Get invites error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
 }

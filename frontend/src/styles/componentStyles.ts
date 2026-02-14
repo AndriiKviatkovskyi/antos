@@ -208,4 +208,10 @@ export const walletStyles = {
     textAlign: "center" as const,
     marginBottom: "20px",
   },
+    checkboxRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    marginBottom: "10px",
+  },
 };

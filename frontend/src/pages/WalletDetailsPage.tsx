@@ -51,6 +51,8 @@ export function WalletDetailsPage() {
   const [recipientBlacklist, setRecipientBlacklist] = useState<string[]>([]);
   const [useWhitelist, setUseWhitelist] = useState(false);
   const [newListAddress, setNewListAddress] = useState("");
+  const [showFundModal, setShowFundModal] = useState(false);
+  const [fundAmount, setFundAmount] = useState("");
 
   const formatApt = (octas: string | number) => (Number(octas)/1e8).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 3 });
 
@@ -171,6 +173,30 @@ export function WalletDetailsPage() {
     setUseWhitelist(!useWhitelist);
   }
 
+  async function handleFundWallet() {
+    if (!account || !address || !fundAmount) return;
+    try {
+      setStatus("Sending funds...");
+      const payload: InputEntryFunctionData = {
+        function: `${MULTISIG_MODULE}::fund_voluntarily`,
+        typeArguments: [],
+        functionArguments: [
+          address,
+          Math.floor(Number(fundAmount) * 1e8) // convert APT -> Octas
+        ],
+      };
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+      setShowFundModal(false);
+      setFundAmount("");
+      await fetchData(); // refresh wallet balance
+      setStatus("Funds sent successfully.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Funding transaction failed.");
+    }
+  }
+
   return (
     <div style={s.container}>
       {status && <p style={s.statusText}>{status}</p>}
@@ -178,7 +204,17 @@ export function WalletDetailsPage() {
         <div style={s.pageGrid}>
           <div style={s.sideBox}>
             <div style={s.sideHeader}>Owner Functions</div>
-            <div style={s.sideBody}>{isOwner ? <p>Owner-only content</p>:<p>Sorry, you're not this wallet's owner</p>}</div>
+            <div style={s.sideBody}>
+              {isOwner ? (
+                <>
+                  <button style={s.primaryButton} onClick={() => setShowFundModal(true)}>
+                    Fund Wallet
+                  </button>
+                </>
+              ) : (
+                <p>Sorry, you're not this wallet's owner</p>
+              )}
+            </div>
           </div>
 
           <div style={s.walletBox}>
@@ -301,6 +337,26 @@ export function WalletDetailsPage() {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FUND WALLET MODAL */}
+      {showFundModal && (
+        <div style={s.modalOverlay}>
+          <div style={s.modal}>
+            <h3>Fund Wallet</h3>
+            <input
+              style={s.input}
+              type="number"
+              placeholder="Amount in APT"
+              value={fundAmount}
+              onChange={e => setFundAmount(e.target.value)}
+            />
+            <div style={s.modalButtons}>
+              <button style={s.primaryButton} onClick={handleFundWallet}>Send</button>
+              <button style={s.secondaryButton} onClick={() => setShowFundModal(false)}>Cancel</button>
             </div>
           </div>
         </div>

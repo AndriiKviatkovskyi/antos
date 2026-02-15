@@ -9,7 +9,6 @@ import { useWallet } from "@aptos-labs/wallet-adapter-react";
 
 const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
 
-// Voting modes
 const MODE_MAJORITY = 1;
 const MODE_COMBINED = 4;
 
@@ -45,7 +44,15 @@ export function WalletDetailsPage() {
   const [tierTwo, setTierTwo] = useState("");
   const [tierThree, setTierThree] = useState("");
 
-  const formatApt = (octas: string | number) => (Number(octas)/100_000_000).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 3 });
+  // Lists management
+  const [showListsModal, setShowListsModal] = useState(false);
+  const [membershipBlacklist, setMembershipBlacklist] = useState<string[]>([]);
+  const [recipientWhitelist, setRecipientWhitelist] = useState<string[]>([]);
+  const [recipientBlacklist, setRecipientBlacklist] = useState<string[]>([]);
+  const [useWhitelist, setUseWhitelist] = useState(false);
+  const [newListAddress, setNewListAddress] = useState("");
+
+  const formatApt = (octas: string | number) => (Number(octas)/1e8).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 3 });
 
   async function fetchData() {
     if (!address) return;
@@ -83,8 +90,8 @@ export function WalletDetailsPage() {
     setOnlyAdminsVote(walletData.only_admins_can_vote);
     setAdminsCanVeto(walletData.admins_can_veto);
     setVotingMode(walletData.voting_mode);
-    setTierTwo(walletData.tier_two_threshold ? (Number(walletData.tier_two_threshold) / 1e8).toString() : "0");
-    setTierThree(walletData.tier_three_threshold ? (Number(walletData.tier_three_threshold) / 1e8).toString() : "0");
+    setTierTwo(walletData.tier_two_threshold ? (Number(walletData.tier_two_threshold)/1e8).toString() : "0");
+    setTierThree(walletData.tier_three_threshold ? (Number(walletData.tier_three_threshold)/1e8).toString() : "0");
     setShowGovernanceModal(true);
   }
 
@@ -101,68 +108,107 @@ export function WalletDetailsPage() {
           onlyAdminsVote,
           adminsCanVeto,
           votingMode,
-          votingMode === MODE_COMBINED ? Math.floor(Number(tierTwo) * 1e8) : 0,
-          votingMode === MODE_COMBINED ? Math.floor(Number(tierThree) * 1e8) : 0,
+          votingMode===MODE_COMBINED ? Math.floor(Number(tierTwo)*1e8):0,
+          votingMode===MODE_COMBINED ? Math.floor(Number(tierThree)*1e8):0,
         ],
       };
       const response = await signAndSubmitTransaction({ data: payload });
       await aptos.waitForTransaction({ transactionHash: response.hash });
       setShowGovernanceModal(false);
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise(r=>setTimeout(r,800));
       await fetchData();
       setStatus("Governance config updated.");
-    } catch (e) {
+    } catch(e) {
       console.error(e);
       setStatus("Transaction failed.");
     }
   }
 
+  async function openListsModal() {
+    if (!walletData) return;
+    setMembershipBlacklist(walletData.membership_blacklist || []);
+    setRecipientWhitelist(walletData.recipient_whitelist || []);
+    setRecipientBlacklist(walletData.recipient_blacklist || []);
+    setUseWhitelist(walletData.recipient_filter_is_whitelist);
+    setNewListAddress("");
+    setShowListsModal(true);
+  }
+
+  async function handleAddToList(listName: "membership"|"recipient") {
+    if (!newListAddress || !account || !address) return;
+    let func: InputEntryFunctionData;
+    if (listName==="membership") {
+      func = { function:`${MULTISIG_MODULE}::edit_membership_blacklist`, typeArguments:[], functionArguments:[address,newListAddress,true] };
+      await signAndSubmitTransaction({ data: func });
+      setMembershipBlacklist([...membershipBlacklist,newListAddress]);
+    } else {
+      func = { function:`${MULTISIG_MODULE}::edit_recipient_list`, typeArguments:[], functionArguments:[address,newListAddress,true,useWhitelist] };
+      await signAndSubmitTransaction({ data: func });
+      if (useWhitelist) setRecipientWhitelist([...recipientWhitelist,newListAddress]);
+      else setRecipientBlacklist([...recipientBlacklist,newListAddress]);
+    }
+    setNewListAddress("");
+  }
+
+  async function handleRemoveFromList(listName: "membership"|"recipient", addr: string) {
+    if (!account || !address) return;
+    let func: InputEntryFunctionData;
+    if (listName==="membership") {
+      func = { function:`${MULTISIG_MODULE}::edit_membership_blacklist`, typeArguments:[], functionArguments:[address,addr,false] };
+      await signAndSubmitTransaction({ data: func });
+      setMembershipBlacklist(membershipBlacklist.filter(a=>a!==addr));
+    } else {
+      func = { function:`${MULTISIG_MODULE}::edit_recipient_list`, typeArguments:[], functionArguments:[address,addr,false,useWhitelist] };
+      await signAndSubmitTransaction({ data: func });
+      if (useWhitelist) setRecipientWhitelist(recipientWhitelist.filter(a=>a!==addr));
+      else setRecipientBlacklist(recipientBlacklist.filter(a=>a!==addr));
+    }
+  }
+
+  async function handleToggleRecipientMode() {
+    if (!account || !address) return;
+    await signAndSubmitTransaction({ data: { function:`${MULTISIG_MODULE}::toggle_recipient_filter_mode`, typeArguments:[], functionArguments:[address,!useWhitelist] } });
+    setUseWhitelist(!useWhitelist);
+  }
+
   return (
     <div style={s.container}>
       {status && <p style={s.statusText}>{status}</p>}
-
       {walletData && (
         <div style={s.pageGrid}>
-          {/* OWNER BOX */}
           <div style={s.sideBox}>
             <div style={s.sideHeader}>Owner Functions</div>
-            <div style={s.sideBody}>{isOwner ? <p>Owner-only content</p> : <p>Sorry, you're not this wallet's owner</p>}</div>
+            <div style={s.sideBody}>{isOwner ? <p>Owner-only content</p>:<p>Sorry, you're not this wallet's owner</p>}</div>
           </div>
 
-          {/* MAIN WALLET */}
           <div style={s.walletBox}>
-            <div style={{ ...s.walletHeader, ...(walletData.is_charity ? s.walletHeaderCharity : s.walletHeaderNormal) }}>
+            <div style={{...s.walletHeader,...(walletData.is_charity?s.walletHeaderCharity:s.walletHeaderNormal)}}>
               <div>
                 <div style={s.walletName}>{walletData.name}</div>
                 <div style={s.walletAddress}>{address}</div>
               </div>
             </div>
             <div style={s.walletBody}>
-              <div>APT Balance: {balance ? `${formatApt(balance)} APT` : "N/A"}</div>
-              <div style={s.ownersHeader} onClick={() => setShowOwners(!showOwners)}>{showOwners ? "▼" : "▶"} Owners ({walletData.owners.length} / {walletData.max_owners})</div>
-              {showOwners && (
-                <ul style={s.ownersList}>
-                  {walletData.owners.map((owner: string) => (
-                    <li key={owner} style={s.ownerItem}>
-                      {owner}{walletData.admins.includes(owner) && <span style={s.adminStar}>★</span>}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <div>APT Balance: {balance?`${formatApt(balance)} APT`:"N/A"}</div>
+              <div style={s.ownersHeader} onClick={()=>setShowOwners(!showOwners)}>{showOwners?"▼":"▶"} Owners ({walletData.owners.length}/{walletData.max_owners})</div>
+              {showOwners && <ul style={s.ownersList}>
+                {walletData.owners.map((owner:string)=>(
+                  <li key={owner} style={s.ownerItem}>{owner}{walletData.admins.includes(owner)&&<span style={s.adminStar}>★</span>}</li>
+                ))}
+              </ul>}
             </div>
           </div>
 
-          {/* ADMIN BOX */}
           <div style={s.sideBox}>
             <div style={s.sideHeader}>Admin Functions</div>
             <div style={s.sideBody}>
-              {isAdmin ? (
-                <>
-                  <button style={s.primaryButton} onClick={() => setShowInviteModal(true)}>Invite user</button>
-                  <div style={{ height: 12 }} />
-                  <button style={s.primaryButton} onClick={openGovernanceModal}>Governance config</button>
-                </>
-              ) : <p>Sorry, you're not this wallet's admin</p>}
+              {isAdmin?<>
+                <button style={s.primaryButton} onClick={()=>setShowInviteModal(true)}>Invite user</button>
+                <div style={{height:12}}/>
+                <button style={s.primaryButton} onClick={openGovernanceModal}>Governance config</button>
+                <div style={{height:12}}/>
+                <button style={s.primaryButton} onClick={openListsModal}>Manage Lists</button>
+              </>:<p>Sorry, you're not this wallet's admin</p>}
             </div>
           </div>
         </div>
@@ -172,17 +218,17 @@ export function WalletDetailsPage() {
       {showInviteModal && (
         <div style={s.modalOverlay}>
           <div style={s.modal}>
-            {walletFull ? <p>Wallet is full</p> : <>
+            {walletFull?<p>Wallet is full</p>:<>
               <h3>Invite User</h3>
-              <input style={s.input} placeholder="0x..." value={inviteAddress} onChange={e => setInviteAddress(e.target.value)} />
-              <select style={s.select} value={inviteRole} onChange={e => setInviteRole(e.target.value as "owner" | "admin")}>
+              <input style={s.input} placeholder="0x..." value={inviteAddress} onChange={e=>setInviteAddress(e.target.value)}/>
+              <select style={s.select} value={inviteRole} onChange={e=>setInviteRole(e.target.value as "owner"|"admin")}>
                 <option value="owner">Owner</option>
                 <option value="admin">Admin</option>
               </select>
-              {isBlacklisted && <p style={s.errorText}>Alert! This user is blacklisted from joining the wallet</p>}
+              {isBlacklisted&&<p style={s.errorText}>Alert! This user is blacklisted from joining the wallet</p>}
               <div style={s.modalButtons}>
                 <button style={s.primaryButton} disabled={isBlacklisted} onClick={handleInvite}>Invite</button>
-                <button style={s.secondaryButton} onClick={() => setShowInviteModal(false)}>Cancel</button>
+                <button style={s.secondaryButton} onClick={()=>setShowInviteModal(false)}>Cancel</button>
               </div>
             </>}
           </div>
@@ -194,28 +240,72 @@ export function WalletDetailsPage() {
         <div style={s.modalOverlay}>
           <div style={s.modal}>
             <h3>Governance Configuration</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <label><input type="checkbox" checked={onlyAdminsInitiate} onChange={e => setOnlyAdminsInitiate(e.target.checked)} /> Only Admins Can Initiate</label>
-              <label><input type="checkbox" checked={onlyAdminsVote} onChange={e => setOnlyAdminsVote(e.target.checked)} /> Only Admins Can Vote</label>
-              <label><input type="checkbox" checked={adminsCanVeto} onChange={e => setAdminsCanVeto(e.target.checked)} /> Admins Can Veto</label>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <label><input type="checkbox" checked={onlyAdminsInitiate} onChange={e=>setOnlyAdminsInitiate(e.target.checked)}/> Only Admins Can Initiate</label>
+              <label><input type="checkbox" checked={onlyAdminsVote} onChange={e=>setOnlyAdminsVote(e.target.checked)}/> Only Admins Can Vote</label>
+              <label><input type="checkbox" checked={adminsCanVeto} onChange={e=>setAdminsCanVeto(e.target.checked)}/> Admins Can Veto</label>
             </div>
-            <select style={s.select} value={votingMode} onChange={e => setVotingMode(Number(e.target.value))}>
+            <select style={s.select} value={votingMode} onChange={e=>setVotingMode(Number(e.target.value))}>
               <option value={1}>Majority</option>
               <option value={2}>Two Thirds</option>
               <option value={3}>Unanimous</option>
               <option value={4}>Combined</option>
             </select>
-            {votingMode === MODE_COMBINED && <>
-              <input style={s.input} type="number" placeholder="Tier Two Threshold" value={tierTwo} onChange={e => setTierTwo(e.target.value)} />
-              <input style={s.input} type="number" placeholder="Tier Three Threshold" value={tierThree} onChange={e => setTierThree(e.target.value)} />
+            {votingMode===MODE_COMBINED&&<>
+              <input style={s.input} type="number" placeholder="Tier Two Threshold" value={tierTwo} onChange={e=>setTierTwo(e.target.value)}/>
+              <input style={s.input} type="number" placeholder="Tier Three Threshold" value={tierThree} onChange={e=>setTierThree(e.target.value)}/>
             </>}
             <div style={s.modalButtons}>
               <button style={s.primaryButton} onClick={handleGovernanceUpdate}>Change</button>
-              <button style={s.secondaryButton} onClick={() => setShowGovernanceModal(false)}>Cancel</button>
+              <button style={s.secondaryButton} onClick={()=>setShowGovernanceModal(false)}>Cancel</button>
             </div>
           </div>
         </div>
       )}
+
+      {/* LISTS MODAL */}
+      {showListsModal && (
+        <div style={s.modalOverlay}>
+          <div style={s.listsModal}>
+            <h3>Lists Management</h3>
+            <div style={{marginBottom:12}}>
+              <label><input type="checkbox" checked={useWhitelist} onChange={handleToggleRecipientMode}/> Recipient Whitelist Mode</label>
+            </div>
+
+            <h4>Membership Blacklist</h4>
+            <ul style={s.ownersList}>
+              {membershipBlacklist.map(addr=><li key={addr} style={s.ownerItem}>
+                {addr} <button style={s.secondaryButton} onClick={()=>handleRemoveFromList("membership",addr)}>Remove</button>
+              </li>)}
+            </ul>
+            <input style={s.input} placeholder="0x..." value={newListAddress} onChange={e=>setNewListAddress(e.target.value)}/>
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              <button style={s.primaryButton} onClick={()=>handleAddToList("membership")}>Add to Membership Blacklist</button>
+              <button style={s.primaryButton} onClick={()=>handleAddToList("recipient")}>Add to Recipient List</button>
+            </div>
+
+            <h4>Recipient List ({useWhitelist?"Whitelist":"Blacklist"})</h4>
+            <ul style={s.ownersList}>
+              {(useWhitelist?recipientWhitelist:recipientBlacklist).map(addr=><li key={addr} style={s.ownerItem}>
+                {addr} <button style={s.secondaryButton} onClick={()=>handleRemoveFromList("recipient",addr)}>Remove</button>
+              </li>)}
+            </ul>
+
+            <div style={s.modalButtons}>
+              <button
+                style={s.secondaryButton}
+                onClick={async () => {
+                  setShowListsModal(false);
+                  await fetchData();
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

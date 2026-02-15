@@ -176,6 +176,15 @@ export const walletStyles = {
     width: "400px",
   },
 
+  listsModal: {
+    backgroundColor: "white",
+    padding: "24px",
+    borderRadius: "16px",
+    width: "60%",
+    maxHeight: "80vh",
+    overflowY: "auto",
+  } as React.CSSProperties,
+
   input: {
     width: "100%",
     padding: "8px",

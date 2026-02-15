@@ -83,8 +83,8 @@ export function WalletDetailsPage() {
     setOnlyAdminsVote(walletData.only_admins_can_vote);
     setAdminsCanVeto(walletData.admins_can_veto);
     setVotingMode(walletData.voting_mode);
-    setTierTwo(walletData.tier_two_threshold?.toString() ?? "0");
-    setTierThree(walletData.tier_three_threshold?.toString() ?? "0");
+    setTierTwo(walletData.tier_two_threshold ? (Number(walletData.tier_two_threshold) / 1e8).toString() : "0");
+    setTierThree(walletData.tier_three_threshold ? (Number(walletData.tier_three_threshold) / 1e8).toString() : "0");
     setShowGovernanceModal(true);
   }
 
@@ -101,8 +101,8 @@ export function WalletDetailsPage() {
           onlyAdminsVote,
           adminsCanVeto,
           votingMode,
-          votingMode === MODE_COMBINED ? Number(tierTwo) : 0,
-          votingMode === MODE_COMBINED ? Number(tierThree) : 0,
+          votingMode === MODE_COMBINED ? Math.floor(Number(tierTwo) * 1e8) : 0,
+          votingMode === MODE_COMBINED ? Math.floor(Number(tierThree) * 1e8) : 0,
         ],
       };
       const response = await signAndSubmitTransaction({ data: payload });

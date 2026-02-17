@@ -223,4 +223,28 @@ export const walletStyles = {
     gap: "8px",
     marginBottom: "10px",
   },
+
+  limitsModal: {
+    backgroundColor: "white",
+    padding: "32px",
+    borderRadius: "20px",
+    width: "70%",
+    maxWidth: "1000px",
+  },
+
+  limitsGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: "24px",
+    marginTop: "24px",
+    marginBottom: "24px",
+  },
+
+  limitCard: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "16px",
+    padding: "20px",
+    textAlign: "center" as const,
+    boxShadow: "0 6px 20px rgba(0,0,0,0.05)",
+  },
 };

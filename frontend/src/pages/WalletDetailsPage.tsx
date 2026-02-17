@@ -11,6 +11,7 @@ const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
 
 const MODE_MAJORITY = 1;
 const MODE_COMBINED = 4;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const hexToString = (hex: string) => {
   try {
@@ -53,6 +54,8 @@ export function WalletDetailsPage() {
   const [newListAddress, setNewListAddress] = useState("");
   const [showFundModal, setShowFundModal] = useState(false);
   const [fundAmount, setFundAmount] = useState("");
+
+  const [showLimitsModal, setShowLimitsModal] = useState(false);
 
   const formatApt = (octas: string | number) => (Number(octas)/1e8).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 3 });
 
@@ -197,18 +200,89 @@ export function WalletDetailsPage() {
     }
   }
 
+  function calculateLimit(
+    tracker: any,
+    periodDays: number
+  ): {
+    elapsed: number;
+    accumulated: number;
+    max: number;
+  } {
+    if (!tracker) return { elapsed: 0, accumulated: 0, max: 0 };
+
+    const now = Date.now();
+    const lastReset = Number(tracker.last_reset_timestamp) * 1000;
+    const max = tracker.max_amount ? Number(tracker.max_amount) : 0;
+
+    const diff = now - lastReset;
+
+    const periodMs = periodDays * DAY_MS;
+
+    // Reset logic on frontend
+    if (diff >= periodMs) {
+      return {
+        elapsed: 0,
+        accumulated: 0,
+        max,
+      };
+    }
+
+    if (periodDays === 1) {
+      const hours = Math.floor(diff / (60 * 60 * 1000));
+      return {
+        elapsed: hours,
+        accumulated: Number(tracker.accumulated_amount),
+        max,
+      };
+    }
+
+    const days = Math.floor(diff / DAY_MS);
+
+    return {
+      elapsed: days,
+      accumulated: Number(tracker.accumulated_amount),
+      max,
+    };
+  }
+
+  const daily = walletData
+    ? calculateLimit(walletData.daily_limit, 1)
+    : null;
+
+  const weekly = walletData
+    ? calculateLimit(walletData.weekly_limit, 7)
+    : null;
+
+  const monthly = walletData
+    ? calculateLimit(walletData.monthly_limit, 30)
+    : null;
+
   return (
     <div style={s.container}>
       {status && <p style={s.statusText}>{status}</p>}
+
       {walletData && (
         <div style={s.pageGrid}>
+          {/* OWNER PANEL */}
           <div style={s.sideBox}>
             <div style={s.sideHeader}>Owner Functions</div>
             <div style={s.sideBody}>
               {isOwner ? (
                 <>
-                  <button style={s.primaryButton} onClick={() => setShowFundModal(true)}>
+                  <button
+                    style={s.primaryButton}
+                    onClick={() => setShowFundModal(true)}
+                  >
                     Fund Wallet
+                  </button>
+
+                  <div style={{ height: 12 }} />
+
+                  <button
+                    style={s.primaryButton}
+                    onClick={() => setShowLimitsModal(true)}
+                  >
+                    View Limits
                   </button>
                 </>
               ) : (
@@ -217,114 +291,302 @@ export function WalletDetailsPage() {
             </div>
           </div>
 
+          {/* CENTER WALLET INFO */}
           <div style={s.walletBox}>
-            <div style={{...s.walletHeader,...(walletData.is_charity?s.walletHeaderCharity:s.walletHeaderNormal)}}>
+            <div
+              style={{
+                ...s.walletHeader,
+                ...(walletData.is_charity
+                  ? s.walletHeaderCharity
+                  : s.walletHeaderNormal),
+              }}
+            >
               <div>
                 <div style={s.walletName}>{walletData.name}</div>
                 <div style={s.walletAddress}>{address}</div>
               </div>
             </div>
+
             <div style={s.walletBody}>
-              <div>APT Balance: {balance?`${formatApt(balance)} APT`:"N/A"}</div>
-              <div style={s.ownersHeader} onClick={()=>setShowOwners(!showOwners)}>{showOwners?"▼":"▶"} Owners ({walletData.owners.length}/{walletData.max_owners})</div>
-              {showOwners && <ul style={s.ownersList}>
-                {walletData.owners.map((owner:string)=>(
-                  <li key={owner} style={s.ownerItem}>{owner}{walletData.admins.includes(owner)&&<span style={s.adminStar}>★</span>}</li>
-                ))}
-              </ul>}
+              <div>
+                APT Balance: {balance ? `${formatApt(balance)} APT` : "N/A"}
+              </div>
+
+              <div
+                style={s.ownersHeader}
+                onClick={() => setShowOwners(!showOwners)}
+              >
+                {showOwners ? "▼" : "▶"} Owners (
+                {walletData.owners.length}/{walletData.max_owners})
+              </div>
+
+              {showOwners && (
+                <ul style={s.ownersList}>
+                  {walletData.owners.map((owner: string) => (
+                    <li key={owner} style={s.ownerItem}>
+                      {owner}
+                      {walletData.admins.includes(owner) && (
+                        <span style={s.adminStar}>★</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
 
+          {/* ADMIN PANEL */}
           <div style={s.sideBox}>
             <div style={s.sideHeader}>Admin Functions</div>
             <div style={s.sideBody}>
-              {isAdmin?<>
-                <button style={s.primaryButton} onClick={()=>setShowInviteModal(true)}>Invite user</button>
-                <div style={{height:12}}/>
-                <button style={s.primaryButton} onClick={openGovernanceModal}>Governance config</button>
-                <div style={{height:12}}/>
-                <button style={s.primaryButton} onClick={openListsModal}>Manage Lists</button>
-              </>:<p>Sorry, you're not this wallet's admin</p>}
+              {isAdmin ? (
+                <>
+                  <button
+                    style={s.primaryButton}
+                    onClick={() => setShowInviteModal(true)}
+                  >
+                    Invite user
+                  </button>
+
+                  <div style={{ height: 12 }} />
+
+                  <button
+                    style={s.primaryButton}
+                    onClick={openGovernanceModal}
+                  >
+                    Governance config
+                  </button>
+
+                  <div style={{ height: 12 }} />
+
+                  <button
+                    style={s.primaryButton}
+                    onClick={openListsModal}
+                  >
+                    Manage Lists
+                  </button>
+                </>
+              ) : (
+                <p>Sorry, you're not this wallet's admin</p>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* INVITE MODAL */}
+      {/* ================= INVITE MODAL ================= */}
       {showInviteModal && (
         <div style={s.modalOverlay}>
           <div style={s.modal}>
-            {walletFull?<p>Wallet is full</p>:<>
-              <h3>Invite User</h3>
-              <input style={s.input} placeholder="0x..." value={inviteAddress} onChange={e=>setInviteAddress(e.target.value)}/>
-              <select style={s.select} value={inviteRole} onChange={e=>setInviteRole(e.target.value as "owner"|"admin")}>
-                <option value="owner">Owner</option>
-                <option value="admin">Admin</option>
-              </select>
-              {isBlacklisted&&<p style={s.errorText}>Alert! This user is blacklisted from joining the wallet</p>}
-              <div style={s.modalButtons}>
-                <button style={s.primaryButton} disabled={isBlacklisted} onClick={handleInvite}>Invite</button>
-                <button style={s.secondaryButton} onClick={()=>setShowInviteModal(false)}>Cancel</button>
-              </div>
-            </>}
+            {walletFull ? (
+              <p>Wallet is full</p>
+            ) : (
+              <>
+                <h3>Invite User</h3>
+                <input
+                  style={s.input}
+                  placeholder="0x..."
+                  value={inviteAddress}
+                  onChange={(e) => setInviteAddress(e.target.value)}
+                />
+                <select
+                  style={s.select}
+                  value={inviteRole}
+                  onChange={(e) =>
+                    setInviteRole(e.target.value as "owner" | "admin")
+                  }
+                >
+                  <option value="owner">Owner</option>
+                  <option value="admin">Admin</option>
+                </select>
+
+                {isBlacklisted && (
+                  <p style={s.errorText}>
+                    Alert! This user is blacklisted from joining the wallet
+                  </p>
+                )}
+
+                <div style={s.modalButtons}>
+                  <button
+                    style={s.primaryButton}
+                    disabled={isBlacklisted}
+                    onClick={handleInvite}
+                  >
+                    Invite
+                  </button>
+                  <button
+                    style={s.secondaryButton}
+                    onClick={() => setShowInviteModal(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {/* GOVERNANCE MODAL */}
+      {/* ================= GOVERNANCE MODAL ================= */}
       {showGovernanceModal && (
         <div style={s.modalOverlay}>
           <div style={s.modal}>
             <h3>Governance Configuration</h3>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              <label><input type="checkbox" checked={onlyAdminsInitiate} onChange={e=>setOnlyAdminsInitiate(e.target.checked)}/> Only Admins Can Initiate</label>
-              <label><input type="checkbox" checked={onlyAdminsVote} onChange={e=>setOnlyAdminsVote(e.target.checked)}/> Only Admins Can Vote</label>
-              <label><input type="checkbox" checked={adminsCanVeto} onChange={e=>setAdminsCanVeto(e.target.checked)}/> Admins Can Veto</label>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={onlyAdminsInitiate}
+                  onChange={(e) => setOnlyAdminsInitiate(e.target.checked)}
+                />{" "}
+                Only Admins Can Initiate
+              </label>
+
+              <label>
+                <input
+                  type="checkbox"
+                  checked={onlyAdminsVote}
+                  onChange={(e) => setOnlyAdminsVote(e.target.checked)}
+                />{" "}
+                Only Admins Can Vote
+              </label>
+
+              <label>
+                <input
+                  type="checkbox"
+                  checked={adminsCanVeto}
+                  onChange={(e) => setAdminsCanVeto(e.target.checked)}
+                />{" "}
+                Admins Can Veto
+              </label>
             </div>
-            <select style={s.select} value={votingMode} onChange={e=>setVotingMode(Number(e.target.value))}>
+
+            <select
+              style={s.select}
+              value={votingMode}
+              onChange={(e) => setVotingMode(Number(e.target.value))}
+            >
               <option value={1}>Majority</option>
               <option value={2}>Two Thirds</option>
               <option value={3}>Unanimous</option>
               <option value={4}>Combined</option>
             </select>
-            {votingMode===MODE_COMBINED&&<>
-              <input style={s.input} type="number" placeholder="Tier Two Threshold" value={tierTwo} onChange={e=>setTierTwo(e.target.value)}/>
-              <input style={s.input} type="number" placeholder="Tier Three Threshold" value={tierThree} onChange={e=>setTierThree(e.target.value)}/>
-            </>}
+
+            {votingMode === MODE_COMBINED && (
+              <>
+                <input
+                  style={s.input}
+                  type="number"
+                  placeholder="Tier Two Threshold (APT)"
+                  value={tierTwo}
+                  onChange={(e) => setTierTwo(e.target.value)}
+                />
+                <input
+                  style={s.input}
+                  type="number"
+                  placeholder="Tier Three Threshold (APT)"
+                  value={tierThree}
+                  onChange={(e) => setTierThree(e.target.value)}
+                />
+              </>
+            )}
+
             <div style={s.modalButtons}>
-              <button style={s.primaryButton} onClick={handleGovernanceUpdate}>Change</button>
-              <button style={s.secondaryButton} onClick={()=>setShowGovernanceModal(false)}>Cancel</button>
+              <button
+                style={s.primaryButton}
+                onClick={handleGovernanceUpdate}
+              >
+                Change
+              </button>
+              <button
+                style={s.secondaryButton}
+                onClick={() => setShowGovernanceModal(false)}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* LISTS MODAL */}
+      {/* ================= LISTS MODAL ================= */}
       {showListsModal && (
         <div style={s.modalOverlay}>
           <div style={s.listsModal}>
             <h3>Lists Management</h3>
-            <div style={{marginBottom:12}}>
-              <label><input type="checkbox" checked={useWhitelist} onChange={handleToggleRecipientMode}/> Recipient Whitelist Mode</label>
+
+            <div style={{ marginBottom: 12 }}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={useWhitelist}
+                  onChange={handleToggleRecipientMode}
+                />{" "}
+                Recipient Whitelist Mode
+              </label>
             </div>
 
             <h4>Membership Blacklist</h4>
             <ul style={s.ownersList}>
-              {membershipBlacklist.map(addr=><li key={addr} style={s.ownerItem}>
-                {addr} <button style={s.secondaryButton} onClick={()=>handleRemoveFromList("membership",addr)}>Remove</button>
-              </li>)}
+              {membershipBlacklist.map((addr) => (
+                <li key={addr} style={s.ownerItem}>
+                  {addr}
+                  <button
+                    style={s.secondaryButton}
+                    onClick={() =>
+                      handleRemoveFromList("membership", addr)
+                    }
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
             </ul>
-            <input style={s.input} placeholder="0x..." value={newListAddress} onChange={e=>setNewListAddress(e.target.value)}/>
-            <div style={{display:"flex",gap:8,marginBottom:12}}>
-              <button style={s.primaryButton} onClick={()=>handleAddToList("membership")}>Add to Membership Blacklist</button>
-              <button style={s.primaryButton} onClick={()=>handleAddToList("recipient")}>Add to Recipient List</button>
+
+            <input
+              style={s.input}
+              placeholder="0x..."
+              value={newListAddress}
+              onChange={(e) => setNewListAddress(e.target.value)}
+            />
+
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <button
+                style={s.primaryButton}
+                onClick={() => handleAddToList("membership")}
+              >
+                Add to Membership Blacklist
+              </button>
+              <button
+                style={s.primaryButton}
+                onClick={() => handleAddToList("recipient")}
+              >
+                Add to Recipient List
+              </button>
             </div>
 
-            <h4>Recipient List ({useWhitelist?"Whitelist":"Blacklist"})</h4>
+            <h4>
+              Recipient List ({useWhitelist ? "Whitelist" : "Blacklist"})
+            </h4>
+
             <ul style={s.ownersList}>
-              {(useWhitelist?recipientWhitelist:recipientBlacklist).map(addr=><li key={addr} style={s.ownerItem}>
-                {addr} <button style={s.secondaryButton} onClick={()=>handleRemoveFromList("recipient",addr)}>Remove</button>
-              </li>)}
+              {(useWhitelist
+                ? recipientWhitelist
+                : recipientBlacklist
+              ).map((addr) => (
+                <li key={addr} style={s.ownerItem}>
+                  {addr}
+                  <button
+                    style={s.secondaryButton}
+                    onClick={() =>
+                      handleRemoveFromList("recipient", addr)
+                    }
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
             </ul>
 
             <div style={s.modalButtons}>
@@ -342,26 +604,85 @@ export function WalletDetailsPage() {
         </div>
       )}
 
-      {/* FUND WALLET MODAL */}
+      {/* ================= FUND MODAL ================= */}
       {showFundModal && (
         <div style={s.modalOverlay}>
           <div style={s.modal}>
             <h3>Fund Wallet</h3>
+
             <input
               style={s.input}
               type="number"
               placeholder="Amount in APT"
               value={fundAmount}
-              onChange={e => setFundAmount(e.target.value)}
+              onChange={(e) => setFundAmount(e.target.value)}
             />
+
             <div style={s.modalButtons}>
-              <button style={s.primaryButton} onClick={handleFundWallet}>Send</button>
-              <button style={s.secondaryButton} onClick={() => setShowFundModal(false)}>Cancel</button>
+              <button
+                style={s.primaryButton}
+                onClick={handleFundWallet}
+              >
+                Send
+              </button>
+              <button
+                style={s.secondaryButton}
+                onClick={() => setShowFundModal(false)}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* ================= LIMITS MODAL ================= */}
+      {showLimitsModal && daily && weekly && monthly && (
+        <div style={s.modalOverlay}>
+          <div style={s.limitsModal}>
+            <h2>Spending Limits</h2>
+
+            <div style={s.limitsGrid}>
+              <div style={s.limitCard}>
+                <h3>Daily limit</h3>
+                <p>{daily.elapsed}/24 hours</p>
+                <p>
+                  {formatApt(daily.accumulated)}/
+                  {formatApt(daily.max)} APT
+                </p>
+              </div>
+
+              <div style={s.limitCard}>
+                <h3>Weekly limit</h3>
+                <p>{weekly.elapsed}/7 days</p>
+                <p>
+                  {formatApt(weekly.accumulated)}/
+                  {formatApt(weekly.max)} APT
+                </p>
+              </div>
+
+              <div style={s.limitCard}>
+                <h3>Monthly limit</h3>
+                <p>{monthly.elapsed}/30 days</p>
+                <p>
+                  {formatApt(monthly.accumulated)}/
+                  {formatApt(monthly.max)} APT
+                </p>
+              </div>
+            </div>
+
+            <div style={s.modalButtons}>
+              <button
+                style={s.secondaryButton}
+                onClick={() => setShowLimitsModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+
 }

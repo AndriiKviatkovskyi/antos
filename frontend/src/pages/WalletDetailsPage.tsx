@@ -56,6 +56,11 @@ export function WalletDetailsPage() {
   const [fundAmount, setFundAmount] = useState("");
 
   const [showLimitsModal, setShowLimitsModal] = useState(false);
+  const [showUpdateLimitsModal, setShowUpdateLimitsModal] = useState(false);
+
+  const [dailyLimitInput, setDailyLimitInput] = useState("");
+  const [weeklyLimitInput, setWeeklyLimitInput] = useState("");
+  const [monthlyLimitInput, setMonthlyLimitInput] = useState("");
 
   const formatApt = (octas: string | number) => (Number(octas)/1e8).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 3 });
 
@@ -203,24 +208,36 @@ export function WalletDetailsPage() {
   function calculateLimit(
     tracker: any,
     periodDays: number
-  ): {
-    elapsed: number;
-    accumulated: number;
-    max: number;
-  } {
-    if (!tracker) return { elapsed: 0, accumulated: 0, max: 0 };
+  ):
+    | {
+        hasLimit: true;
+        elapsed: number;
+        accumulated: number;
+        max: number;
+      }
+    | {
+        hasLimit: false;
+      } {
+
+    if (!tracker) return { hasLimit: false };
+    const maxVec = tracker.max_amount?.vec;
+
+    if (!maxVec || maxVec.length === 0) {
+      return { hasLimit: false };
+    }
+
+    const max = Number(maxVec[0]);
+    const accumulated = Number(tracker.accumulated_amount);
 
     const now = Date.now();
     const lastReset = Number(tracker.last_reset_timestamp) * 1000;
-    const max = tracker.max_amount ? Number(tracker.max_amount) : 0;
-
     const diff = now - lastReset;
 
     const periodMs = periodDays * DAY_MS;
 
-    // Reset logic on frontend
     if (diff >= periodMs) {
       return {
+        hasLimit: true,
         elapsed: 0,
         accumulated: 0,
         max,
@@ -230,8 +247,9 @@ export function WalletDetailsPage() {
     if (periodDays === 1) {
       const hours = Math.floor(diff / (60 * 60 * 1000));
       return {
+        hasLimit: true,
         elapsed: hours,
-        accumulated: Number(tracker.accumulated_amount),
+        accumulated,
         max,
       };
     }
@@ -239,8 +257,9 @@ export function WalletDetailsPage() {
     const days = Math.floor(diff / DAY_MS);
 
     return {
+      hasLimit: true,
       elapsed: days,
-      accumulated: Number(tracker.accumulated_amount),
+      accumulated,
       max,
     };
   }
@@ -256,6 +275,84 @@ export function WalletDetailsPage() {
   const monthly = walletData
     ? calculateLimit(walletData.monthly_limit, 30)
     : null;
+
+  function openUpdateLimitsModal() {
+    if (!walletData) return;
+
+    const getLimit = (limitObj: any) => {
+      const vec = limitObj?.max_amount?.vec;
+      if (!vec || vec.length === 0) return "";
+      return (Number(vec[0]) / 1e8).toString();
+    };
+
+    setDailyLimitInput(getLimit(walletData.daily_limit));
+    setWeeklyLimitInput(getLimit(walletData.weekly_limit));
+    setMonthlyLimitInput(getLimit(walletData.monthly_limit));
+
+    setShowUpdateLimitsModal(true);
+  }
+
+  async function handleUpdateLimits() {
+    if (!account || !address || !walletData) return;
+
+    try {
+      setStatus("Updating limits...");
+
+      const toOctas = (val: string) =>
+        val && Number(val) > 0 ? Math.floor(Number(val) * 1e8) : 0;
+
+      const dailyOctas = toOctas(dailyLimitInput);
+      const weeklyOctas = toOctas(weeklyLimitInput);
+      const monthlyOctas = toOctas(monthlyLimitInput);
+
+      // 🚨 VALIDATION: cannot go below accumulated
+      if (
+        walletData.daily_limit?.accumulated_amount &&
+        dailyOctas < Number(walletData.daily_limit.accumulated_amount)
+      ) {
+        setStatus("Daily limit cannot be below already spent amount.");
+        return;
+      }
+
+      if (
+        walletData.weekly_limit?.accumulated_amount &&
+        weeklyOctas < Number(walletData.weekly_limit.accumulated_amount)
+      ) {
+        setStatus("Weekly limit cannot be below already spent amount.");
+        return;
+      }
+
+      if (
+        walletData.monthly_limit?.accumulated_amount &&
+        monthlyOctas < Number(walletData.monthly_limit.accumulated_amount)
+      ) {
+        setStatus("Monthly limit cannot be below already spent amount.");
+        return;
+      }
+
+      const payload: InputEntryFunctionData = {
+        function: `${MULTISIG_MODULE}::set_transaction_limits`,
+        typeArguments: [],
+        functionArguments: [
+          address,
+          dailyOctas,
+          weeklyOctas,
+          monthlyOctas,
+        ],
+      };
+
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+
+      setShowUpdateLimitsModal(false);
+      await fetchData(); // 🔄 refresh wallet data
+
+      setStatus("Limits updated successfully.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Failed to update limits.");
+    }
+  }
 
   return (
     <div style={s.container}>
@@ -364,6 +461,15 @@ export function WalletDetailsPage() {
                     onClick={openListsModal}
                   >
                     Manage Lists
+                  </button>
+
+                  <div style={{ height: 12 }} />
+
+                  <button
+                    style={s.primaryButton}
+                    onClick={openUpdateLimitsModal}
+                  >
+                    Update Limits
                   </button>
                 </>
               ) : (
@@ -643,31 +749,55 @@ export function WalletDetailsPage() {
             <h2>Spending Limits</h2>
 
             <div style={s.limitsGrid}>
+              {/* DAILY */}
               <div style={s.limitCard}>
                 <h3>Daily limit</h3>
-                <p>{daily.elapsed}/24 hours</p>
-                <p>
-                  {formatApt(daily.accumulated)}/
-                  {formatApt(daily.max)} APT
-                </p>
+
+                {!daily?.hasLimit ? (
+                  <p>No limit</p>
+                ) : (
+                  <>
+                    <p>{daily.elapsed}/24 hours</p>
+                    <p>
+                      {formatApt(daily.accumulated)}/
+                      {formatApt(daily.max)} APT
+                    </p>
+                  </>
+                )}
               </div>
 
+              {/* WEEKLY */}
               <div style={s.limitCard}>
                 <h3>Weekly limit</h3>
-                <p>{weekly.elapsed}/7 days</p>
-                <p>
-                  {formatApt(weekly.accumulated)}/
-                  {formatApt(weekly.max)} APT
-                </p>
+
+                {!weekly?.hasLimit ? (
+                  <p>No limit</p>
+                ) : (
+                  <>
+                    <p>{weekly.elapsed}/7 days</p>
+                    <p>
+                      {formatApt(weekly.accumulated)}/
+                      {formatApt(weekly.max)} APT
+                    </p>
+                  </>
+                )}
               </div>
 
+              {/* MONTHLY */}
               <div style={s.limitCard}>
                 <h3>Monthly limit</h3>
-                <p>{monthly.elapsed}/30 days</p>
-                <p>
-                  {formatApt(monthly.accumulated)}/
-                  {formatApt(monthly.max)} APT
-                </p>
+
+                {!monthly?.hasLimit ? (
+                  <p>No limit</p>
+                ) : (
+                  <>
+                    <p>{monthly.elapsed}/30 days</p>
+                    <p>
+                      {formatApt(monthly.accumulated)}/
+                      {formatApt(monthly.max)} APT
+                    </p>
+                  </>
+                )}
               </div>
             </div>
 
@@ -677,6 +807,54 @@ export function WalletDetailsPage() {
                 onClick={() => setShowLimitsModal(false)}
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= UPDATE LIMITS MODAL ================= */}
+      {showUpdateLimitsModal && (
+        <div style={s.modalOverlay}>
+          <div style={s.modal}>
+            <h3>Update Spending Limits</h3>
+
+            <input
+              style={s.input}
+              type="number"
+              placeholder="Daily Limit (APT)"
+              value={dailyLimitInput}
+              onChange={(e) => setDailyLimitInput(e.target.value)}
+            />
+
+            <input
+              style={s.input}
+              type="number"
+              placeholder="Weekly Limit (APT)"
+              value={weeklyLimitInput}
+              onChange={(e) => setWeeklyLimitInput(e.target.value)}
+            />
+
+            <input
+              style={s.input}
+              type="number"
+              placeholder="Monthly Limit (APT)"
+              value={monthlyLimitInput}
+              onChange={(e) => setMonthlyLimitInput(e.target.value)}
+            />
+
+            <div style={s.modalButtons}>
+              <button
+                style={s.primaryButton}
+                onClick={handleUpdateLimits}
+              >
+                Update
+              </button>
+              <button
+                style={s.secondaryButton}
+                onClick={() => setShowUpdateLimitsModal(false)}
+              >
+                Cancel
               </button>
             </div>
           </div>

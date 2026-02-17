@@ -61,6 +61,7 @@ export function WalletDetailsPage() {
   const [dailyLimitInput, setDailyLimitInput] = useState("");
   const [weeklyLimitInput, setWeeklyLimitInput] = useState("");
   const [monthlyLimitInput, setMonthlyLimitInput] = useState("");
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
 
   const formatApt = (octas: string | number) => (Number(octas)/1e8).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 3 });
 
@@ -85,6 +86,7 @@ export function WalletDetailsPage() {
 
   const isOwner = currentUserHex && walletData?.owners?.some((o: string) => o.toLowerCase() === currentUserHex.toLowerCase());
   const isAdmin = currentUserHex && walletData?.admins?.some((a: string) => a.toLowerCase() === currentUserHex.toLowerCase());
+  const isLastAdmin = isAdmin && walletData?.admins?.length === 1;
   const walletFull = walletData && walletData.owners.length >= walletData.max_owners;
   const isBlacklisted = walletData && walletData.membership_blacklist?.some((addr: string) => addr.toLowerCase() === inviteAddress.toLowerCase());
 
@@ -354,6 +356,33 @@ export function WalletDetailsPage() {
     }
   }
 
+  async function handleSelfRemove() {
+    if (!account || !address) return;
+
+    try {
+      setStatus("Leaving wallet...");
+
+      const payload: InputEntryFunctionData = {
+        function: `${MULTISIG_MODULE}::self_remove`,
+        typeArguments: [],
+        functionArguments: [address],
+      };
+
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+
+      setShowLeaveModal(false);
+
+      setStatus("You have left the wallet.");
+
+      // Optional: redirect away from this page
+      window.location.href = "/"; // or your wallets list page
+    } catch (e) {
+      console.error(e);
+      setStatus("Failed to leave wallet.");
+    }
+  }
+
   return (
     <div style={s.container}>
       {status && <p style={s.statusText}>{status}</p>}
@@ -381,6 +410,26 @@ export function WalletDetailsPage() {
                   >
                     View Limits
                   </button>
+
+                  <div style={{ height: 12 }} />
+
+                  <button
+                    style={{
+                      ...s.secondaryButton,
+                      backgroundColor: "#ed1b1b",
+                      border: "1px solid #a33",
+                    }}
+                    disabled={isLastAdmin}
+                    onClick={() => setShowLeaveModal(true)}
+                  >
+                    Leave Wallet
+                  </button>
+
+                  {isLastAdmin && (
+                    <p style={s.errorText}>
+                      You cannot leave — you are the last admin.
+                    </p>
+                  )}
                 </>
               ) : (
                 <p>Sorry, you're not this wallet's owner</p>
@@ -853,6 +902,38 @@ export function WalletDetailsPage() {
               <button
                 style={s.secondaryButton}
                 onClick={() => setShowUpdateLimitsModal(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= LEAVE WALLET MODAL ================= */}
+      {showLeaveModal && (
+        <div style={s.modalOverlay}>
+          <div style={s.modal}>
+            <h3>Leave Wallet</h3>
+
+            <p>
+              Are you sure you want to leave this wallet?
+            </p>
+
+            <div style={s.modalButtons}>
+              <button
+                style={{
+                  ...s.primaryButton,
+                  backgroundColor: "#ed1b1b",
+                }}
+                onClick={handleSelfRemove}
+              >
+                Yes, Leave
+              </button>
+
+              <button
+                style={s.secondaryButton}
+                onClick={() => setShowLeaveModal(false)}
               >
                 Cancel
               </button>

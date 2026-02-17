@@ -89,6 +89,9 @@ export function WalletDetailsPage() {
   const isLastAdmin = isAdmin && walletData?.admins?.length === 1;
   const walletFull = walletData && walletData.owners.length >= walletData.max_owners;
   const isBlacklisted = walletData && walletData.membership_blacklist?.some((addr: string) => addr.toLowerCase() === inviteAddress.toLowerCase());
+  const [showKickModal, setShowKickModal] = useState(false);
+  const [ownerToKick, setOwnerToKick] = useState<string | null>(null);
+
 
   async function handleInvite() {
     if (!address || !inviteAddress) return;
@@ -383,6 +386,34 @@ export function WalletDetailsPage() {
     }
   }
 
+
+  async function handleKickOwner() {
+    if (!account || !address || !ownerToKick) return;
+
+    try {
+      setStatus("Removing owner...");
+
+      const payload: InputEntryFunctionData = {
+        function: `${MULTISIG_MODULE}::remove_owner`,
+        typeArguments: [],
+        functionArguments: [address, ownerToKick],
+      };
+
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+
+      setShowKickModal(false);
+      setOwnerToKick(null);
+
+      await fetchData();
+
+      setStatus("Owner removed successfully.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Failed to remove owner.");
+    }
+  }
+
   return (
     <div style={s.container}>
       {status && <p style={s.statusText}>{status}</p>}
@@ -468,14 +499,50 @@ export function WalletDetailsPage() {
 
               {showOwners && (
                 <ul style={s.ownersList}>
-                  {walletData.owners.map((owner: string) => (
-                    <li key={owner} style={s.ownerItem}>
-                      {owner}
-                      {walletData.admins.includes(owner) && (
-                        <span style={s.adminStar}>★</span>
-                      )}
-                    </li>
-                  ))}
+                  {walletData.owners.map((owner: string) => {
+                    const ownerIsAdmin = walletData.admins.includes(owner);
+
+                    const canKick =
+                      isAdmin &&                // current user is admin
+                      !ownerIsAdmin &&          // target is not admin
+                      owner.toLowerCase() !== currentUserHex?.toLowerCase(); // cannot kick self
+
+                    return (
+                      <li
+                        key={owner}
+                        style={{
+                          ...s.ownerItem,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span>
+                          {owner}
+                          {ownerIsAdmin && <span style={s.adminStar}>★</span>}
+                        </span>
+
+                        {canKick && (
+                          <button
+                            style={{
+                              ...s.secondaryButton,
+                              backgroundColor: "#fee2e2",
+                              border: "1px solid #ef4444",
+                              color: "#b91c1c",
+                              padding: "4px 10px",
+                              fontSize: "12px",
+                            }}
+                            onClick={() => {
+                              setOwnerToKick(owner);
+                              setShowKickModal(true);
+                            }}
+                          >
+                            Kick
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
@@ -941,6 +1008,45 @@ export function WalletDetailsPage() {
           </div>
         </div>
       )}
+      {/* ================= KICK OWNER MODAL ================= */}
+      {showKickModal && ownerToKick && (
+        <div style={s.modalOverlay}>
+          <div style={s.modal}>
+            <h3>Remove Owner</h3>
+
+            <p>
+              Are you sure you want to remove:
+            </p>
+
+            <p style={{ fontFamily: "monospace", fontSize: "13px" }}>
+              {ownerToKick}
+            </p>
+
+            <div style={s.modalButtons}>
+              <button
+                style={{
+                  ...s.primaryButton,
+                  backgroundColor: "#ef4444",
+                }}
+                onClick={handleKickOwner}
+              >
+                Yes, Remove
+              </button>
+
+              <button
+                style={s.secondaryButton}
+                onClick={() => {
+                  setShowKickModal(false);
+                  setOwnerToKick(null);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 

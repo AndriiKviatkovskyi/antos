@@ -1,4 +1,3 @@
-// src/pages/WalletDetailsPage.tsx
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
@@ -21,7 +20,20 @@ const hexToString = (hex: string) => {
   } catch { return hex; }
 };
 
-const bytesToHex = (bytes: Uint8Array) => "0x" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+const bytesToHex = (bytes: Uint8Array) =>
+  "0x" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+
+const formatApt = (octas: string | number) => {
+  const value = Number(octas) / 1e8;
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
+  });
+};
+
+const fromOctas = (octas: string | number | undefined) => 
+  octas ? (Number(octas) / 1e8).toString() : "0";
+const toOctas = (apt: string | number) => Math.floor(Number(apt || 0) * 1e8);
 
 export function WalletDetailsPage() {
   const { address } = useParams<{ address: string }>();
@@ -45,7 +57,6 @@ export function WalletDetailsPage() {
   const [tierTwo, setTierTwo] = useState("");
   const [tierThree, setTierThree] = useState("");
 
-  // Lists management
   const [showListsModal, setShowListsModal] = useState(false);
   const [membershipBlacklist, setMembershipBlacklist] = useState<string[]>([]);
   const [recipientWhitelist, setRecipientWhitelist] = useState<string[]>([]);
@@ -57,34 +68,43 @@ export function WalletDetailsPage() {
 
   const [showLimitsModal, setShowLimitsModal] = useState(false);
   const [showUpdateLimitsModal, setShowUpdateLimitsModal] = useState(false);
-
   const [dailyLimitInput, setDailyLimitInput] = useState("");
   const [weeklyLimitInput, setWeeklyLimitInput] = useState("");
   const [monthlyLimitInput, setMonthlyLimitInput] = useState("");
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
 
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [showKickModal, setShowKickModal] = useState(false);
   const [ownerToKick, setOwnerToKick] = useState<string | null>(null);
-  const [showProposeModal, setShowProposeModal] = useState(false);
-  
+
+  const [showProposeModal, setShowProposeModal] = useState(false);  
   const [proposalRecipient, setProposalRecipient] = useState("");
   const [proposalAmount, setProposalAmount] = useState("");
   const [proposalTimelock, setProposalTimelock] = useState("");
   const [proposalExecWindow, setProposalExecWindow] = useState("");
   const [proposalError, setProposalError] = useState<string | null>(null);
 
-  const formatApt = (octas: string | number) => (Number(octas)/1e8).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 3 });
-
   async function fetchData() {
     if (!address) return;
     try {
       setStatus("Loading...");
-      const resource = await aptos.getAccountResource({ accountAddress: address, resourceType: `${MULTISIG_MODULE}::MultisigStore` as const });
+
+      const resource = await aptos.getAccountResource({
+        accountAddress: address,
+        resourceType: `${MULTISIG_MODULE}::MultisigStore` as const
+      });
+
       if (resource.name) resource.name = hexToString(resource.name);
       setWalletData(resource);
+      
+      const walletInfo = await aptos.view({
+        payload:{
+          function: `${MULTISIG_MODULE}::get_wallet_info`,
+          typeArguments: [],
+          functionArguments: [address]
+        }
+      });
 
-      const response = await aptos.view({ payload: { function: `${MULTISIG_MODULE}::get_wallet_info`, typeArguments: [], functionArguments: [address] } });
-      setBalance((response[0] as any).balance);
+      setBalance((walletInfo[0] as any).balance);
       setStatus("");
     } catch (e) {
       console.error(e);
@@ -94,17 +114,37 @@ export function WalletDetailsPage() {
 
   useEffect(() => { fetchData(); }, [address]);
 
-  const isOwner = currentUserHex && walletData?.owners?.some((o: string) => o.toLowerCase() === currentUserHex.toLowerCase());
-  const isAdmin = currentUserHex && walletData?.admins?.some((a: string) => a.toLowerCase() === currentUserHex.toLowerCase());
+  const isOwner = currentUserHex && 
+    walletData?.owners?.some((o: string) => 
+      o.toLowerCase() === currentUserHex.toLowerCase()
+    );
+
+  const isAdmin = currentUserHex &&
+    walletData?.admins?.some((a: string) =>
+      a.toLowerCase() === currentUserHex.toLowerCase()
+    );
+
   const isLastAdmin = isAdmin && walletData?.admins?.length === 1;
   const walletFull = walletData && walletData.owners.length >= walletData.max_owners;
-  const isBlacklisted = walletData && walletData.membership_blacklist?.some((addr: string) => addr.toLowerCase() === inviteAddress.toLowerCase());
 
+  const isBlacklisted = walletData &&
+    walletData.membership_blacklist?.some((addr: string) =>
+      addr.toLowerCase() === inviteAddress.toLowerCase()
+    );
 
   async function handleInvite() {
     if (!address || !inviteAddress) return;
-    await signAndSubmitTransaction({ data: { function: `${MULTISIG_MODULE}::invite_owner`, functionArguments: [address, inviteAddress, inviteRole === "admin"] } });
-    setShowInviteModal(false); setInviteAddress("");
+
+    const payload: InputEntryFunctionData = {
+      function: `${MULTISIG_MODULE}::invite_owner`,
+      typeArguments: [],
+      functionArguments: [address, inviteAddress, inviteRole === "admin"]
+    };
+
+    await signAndSubmitTransaction({ data: payload });
+
+    setShowInviteModal(false);
+    setInviteAddress("");
   }
 
   function openGovernanceModal() {
@@ -113,8 +153,8 @@ export function WalletDetailsPage() {
     setOnlyAdminsVote(walletData.only_admins_can_vote);
     setAdminsCanVeto(walletData.admins_can_veto);
     setVotingMode(walletData.voting_mode);
-    setTierTwo(walletData.tier_two_threshold ? (Number(walletData.tier_two_threshold)/1e8).toString() : "0");
-    setTierThree(walletData.tier_three_threshold ? (Number(walletData.tier_three_threshold)/1e8).toString() : "0");
+    setTierTwo(fromOctas(walletData.tier_two_threshold));
+    setTierThree(fromOctas(walletData.tier_three_threshold));
     setShowGovernanceModal(true);
   }
 
@@ -131,8 +171,8 @@ export function WalletDetailsPage() {
           onlyAdminsVote,
           adminsCanVeto,
           votingMode,
-          votingMode===MODE_COMBINED ? Math.floor(Number(tierTwo)*1e8):0,
-          votingMode===MODE_COMBINED ? Math.floor(Number(tierThree)*1e8):0,
+          votingMode===MODE_COMBINED ? toOctas(tierTwo) : 0,
+          votingMode===MODE_COMBINED ? toOctas(tierThree) : 0,
         ],
       };
       const response = await signAndSubmitTransaction({ data: payload });
@@ -159,14 +199,22 @@ export function WalletDetailsPage() {
 
   async function handleAddToList(listName: "membership"|"recipient") {
     if (!newListAddress || !account || !address) return;
-    let func: InputEntryFunctionData;
+    let payload: InputEntryFunctionData;
     if (listName==="membership") {
-      func = { function:`${MULTISIG_MODULE}::edit_membership_blacklist`, typeArguments:[], functionArguments:[address,newListAddress,true] };
-      await signAndSubmitTransaction({ data: func });
+      payload = {
+        function:`${MULTISIG_MODULE}::edit_membership_blacklist`,
+        typeArguments:[],
+        functionArguments:[address,newListAddress,true]
+      };
+      await signAndSubmitTransaction({ data: payload });
       setMembershipBlacklist([...membershipBlacklist,newListAddress]);
     } else {
-      func = { function:`${MULTISIG_MODULE}::edit_recipient_list`, typeArguments:[], functionArguments:[address,newListAddress,true,useWhitelist] };
-      await signAndSubmitTransaction({ data: func });
+      payload = {
+        function:`${MULTISIG_MODULE}::edit_recipient_list`,
+        typeArguments:[],
+        functionArguments:[address,newListAddress,true,useWhitelist]
+      };
+      await signAndSubmitTransaction({ data: payload });
       if (useWhitelist) setRecipientWhitelist([...recipientWhitelist,newListAddress]);
       else setRecipientBlacklist([...recipientBlacklist,newListAddress]);
     }
@@ -175,22 +223,37 @@ export function WalletDetailsPage() {
 
   async function handleRemoveFromList(listName: "membership"|"recipient", addr: string) {
     if (!account || !address) return;
-    let func: InputEntryFunctionData;
+    let payload: InputEntryFunctionData;
     if (listName==="membership") {
-      func = { function:`${MULTISIG_MODULE}::edit_membership_blacklist`, typeArguments:[], functionArguments:[address,addr,false] };
-      await signAndSubmitTransaction({ data: func });
-      setMembershipBlacklist(membershipBlacklist.filter(a=>a!==addr));
+      payload = {
+        function:`${MULTISIG_MODULE}::edit_membership_blacklist`,
+        typeArguments:[],
+        functionArguments:[address,addr,false]
+      };
+      await signAndSubmitTransaction({ data: payload });
+      setMembershipBlacklist(membershipBlacklist.filter(a => a!==addr));
     } else {
-      func = { function:`${MULTISIG_MODULE}::edit_recipient_list`, typeArguments:[], functionArguments:[address,addr,false,useWhitelist] };
-      await signAndSubmitTransaction({ data: func });
-      if (useWhitelist) setRecipientWhitelist(recipientWhitelist.filter(a=>a!==addr));
-      else setRecipientBlacklist(recipientBlacklist.filter(a=>a!==addr));
+      payload = {
+        function:`${MULTISIG_MODULE}::edit_recipient_list`,
+        typeArguments:[],
+        functionArguments:[address,addr,false,useWhitelist]
+      };
+      await signAndSubmitTransaction({ data: payload });
+      if (useWhitelist) setRecipientWhitelist(recipientWhitelist.filter(a => a!==addr));
+      else setRecipientBlacklist(recipientBlacklist.filter(a => a!==addr));
     }
   }
 
   async function handleToggleRecipientMode() {
     if (!account || !address) return;
-    await signAndSubmitTransaction({ data: { function:`${MULTISIG_MODULE}::toggle_recipient_filter_mode`, typeArguments:[], functionArguments:[address,!useWhitelist] } });
+
+    const payload: InputEntryFunctionData = {
+      function: `${MULTISIG_MODULE}::toggle_recipient_filter_mode`,
+      typeArguments: [],
+      functionArguments: [address, !useWhitelist]
+    };
+
+    await signAndSubmitTransaction({ data: payload });
     setUseWhitelist(!useWhitelist);
   }
 
@@ -198,19 +261,21 @@ export function WalletDetailsPage() {
     if (!account || !address || !fundAmount) return;
     try {
       setStatus("Sending funds...");
+      
       const payload: InputEntryFunctionData = {
         function: `${MULTISIG_MODULE}::fund_voluntarily`,
         typeArguments: [],
         functionArguments: [
           address,
-          Math.floor(Number(fundAmount) * 1e8) // convert APT -> Octas
+          toOctas(fundAmount)
         ],
       };
+
       const response = await signAndSubmitTransaction({ data: payload });
       await aptos.waitForTransaction({ transactionHash: response.hash });
       setShowFundModal(false);
       setFundAmount("");
-      await fetchData(); // refresh wallet balance
+      await fetchData();
       setStatus("Funds sent successfully.");
     } catch (e) {
       console.error(e);
@@ -289,9 +354,7 @@ export function WalletDetailsPage() {
     ? calculateLimit(walletData.monthly_limit, 30)
     : null;
 
-  const proposalAmountOctas = proposalAmount
-    ? Math.floor(Number(proposalAmount) * 1e8)
-    : 0;
+  const proposalAmountOctas = proposalAmount ? toOctas(proposalAmount) : 0;
 
   const nowSeconds = Math.floor(Date.now() / 1000);
 
@@ -321,7 +384,7 @@ export function WalletDetailsPage() {
     const getLimit = (limitObj: any) => {
       const vec = limitObj?.max_amount?.vec;
       if (!vec || vec.length === 0) return "";
-      return (Number(vec[0]) / 1e8).toString();
+      return fromOctas(vec[0]);
     };
 
     setDailyLimitInput(getLimit(walletData.daily_limit));
@@ -337,14 +400,10 @@ export function WalletDetailsPage() {
     try {
       setStatus("Updating limits...");
 
-      const toOctas = (val: string) =>
-        val && Number(val) > 0 ? Math.floor(Number(val) * 1e8) : 0;
-
       const dailyOctas = toOctas(dailyLimitInput);
       const weeklyOctas = toOctas(weeklyLimitInput);
       const monthlyOctas = toOctas(monthlyLimitInput);
 
-      // 🚨 VALIDATION: cannot go below accumulated
       if (
         walletData.daily_limit?.accumulated_amount &&
         dailyOctas < Number(walletData.daily_limit.accumulated_amount)
@@ -384,8 +443,7 @@ export function WalletDetailsPage() {
       await aptos.waitForTransaction({ transactionHash: response.hash });
 
       setShowUpdateLimitsModal(false);
-      await fetchData(); // 🔄 refresh wallet data
-
+      await fetchData();
       setStatus("Limits updated successfully.");
     } catch (e) {
       console.error(e);
@@ -409,11 +467,8 @@ export function WalletDetailsPage() {
       await aptos.waitForTransaction({ transactionHash: response.hash });
 
       setShowLeaveModal(false);
-
       setStatus("You have left the wallet.");
-
-      // Optional: redirect away from this page
-      window.location.href = "/"; // or your wallets list page
+      window.location.href = "/";
     } catch (e) {
       console.error(e);
       setStatus("Failed to leave wallet.");
@@ -438,9 +493,7 @@ export function WalletDetailsPage() {
 
       setShowKickModal(false);
       setOwnerToKick(null);
-
       await fetchData();
-
       setStatus("Owner removed successfully.");
     } catch (e) {
       console.error(e);
@@ -455,18 +508,14 @@ export function WalletDetailsPage() {
       setStatus("Creating proposal...");
 
       const nowSeconds = Math.floor(Date.now() / 1000);
-
-      // Amount APT → Octas
-      const amountOctas = Math.floor(Number(proposalAmount) * 1e8);
-
-      // Timelock conversion
+      const amountOctas = toOctas(proposalAmount);
       let timelockSeconds = 0;
+
       if (proposalTimelock) {
         const selected = Math.floor(new Date(proposalTimelock).getTime() / 1000);
         timelockSeconds = selected > nowSeconds ? selected - nowSeconds : 0;
       }
 
-      // Execution window conversion
       let executionWindow = 0;
       if (proposalExecWindow && proposalTimelock) {
         const execTime = Math.floor(new Date(proposalExecWindow).getTime() / 1000);
@@ -506,18 +555,13 @@ export function WalletDetailsPage() {
 
   useEffect(() => {
     if (!walletData) return;
-
     setProposalError(null);
-
     if (!proposalRecipient) return;
 
     const whitelistEnabled = walletData.whitelist_enabled;
-
     setRecipientWhitelist(walletData.recipient_whitelist || []);
     setRecipientBlacklist(walletData.recipient_blacklist || []);
 
-
-    // Whitelist / blacklist logic
     if (whitelistEnabled) {
       if (!recipientWhitelist.includes(proposalRecipient)) {
         setProposalError("Recipient not in whitelist.");
@@ -530,7 +574,6 @@ export function WalletDetailsPage() {
       }
     }
 
-    // Execution window validation
     if (proposalExecWindow && proposalTimelock) {
       const execTime = new Date(proposalExecWindow).getTime();
       const timelockTime = new Date(proposalTimelock).getTime();
@@ -541,7 +584,6 @@ export function WalletDetailsPage() {
       }
     }
 
-    // Limits validation
     if (proposalAmountOctas > 0) {
       const limits = [
         { name: "Daily", data: daily },

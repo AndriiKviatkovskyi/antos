@@ -64,6 +64,9 @@ export function WalletDetailsPage() {
   const [proposalExecWindow, setProposalExecWindow] = useState("");
   const [proposalError, setProposalError] = useState<string | null>(null);
 
+  const [showProposalsModal, setShowProposalsModal] = useState(false);
+  const [expandedApprovals, setExpandedApprovals] = useState<number | null>(null);
+
   async function fetchData() {
     if (!address) return;
     try {
@@ -438,7 +441,10 @@ export function WalletDetailsPage() {
         timelockSeconds = selected > nowSeconds ? selected - nowSeconds : 0;
       }
 
-      let executionWindow = 0;
+      const TEN_YEARS_SECONDS = 10 * 365 * 24 * 60 * 60;
+      
+      let executionWindow = TEN_YEARS_SECONDS;
+      
       if (proposalExecWindow && proposalTimelock) {
         const execTime = Math.floor(new Date(proposalExecWindow).getTime() / 1000);
         const timelockAbs = nowSeconds + timelockSeconds;
@@ -472,6 +478,29 @@ export function WalletDetailsPage() {
     } catch (e) {
       console.error(e);
       setStatus("Failed to create proposal.");
+    }
+  }
+
+  async function handleVote(proposalId: number) {
+    if (!account || !address) return;
+
+    try {
+      setStatus("Voting...");
+
+      const payload: InputEntryFunctionData = {
+        function: `${MULTISIG_MODULE}::approve`,
+        typeArguments: [],
+        functionArguments: [address, proposalId],
+      };
+
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+
+      await fetchData();
+      setStatus("Vote submitted.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Vote failed.");
     }
   }
 
@@ -682,6 +711,13 @@ export function WalletDetailsPage() {
                   onClick={() => setShowProposeModal(true)}
                 >
                   Initiate Proposal
+                </button>
+
+                <button
+                  style={s.secondaryButton}
+                  onClick={() => setShowProposalsModal(true)}
+                >
+                  View Proposals
                 </button>
 
                 {walletData.only_admins_can_initiate && !isAdmin && (
@@ -1252,7 +1288,132 @@ export function WalletDetailsPage() {
         </div>
       )}
 
+      {/* ================= PROPOSALS MODAL ================= */}
+      {showProposalsModal && walletData && (
+        <div style={s.modalOverlay}>
+          <div style={s.proposalsModal}>
+            <h2>All Proposals</h2>
+
+            {walletData.proposals
+              ?.slice()
+              .reverse()
+              .map((proposal: any) => {
+                const totalVoters = walletData.owners.length;
+                let activeMode = walletData.voting_mode;
+
+                if (activeMode === MODE_COMBINED) {
+                  if (proposal.amount < walletData.tier_two_threshold)
+                    activeMode = MODE_MAJORITY;
+                  else if (proposal.amount < walletData.tier_three_threshold)
+                    activeMode = 2;
+                  else activeMode = 3;
+                }
+
+                const approvalsCount = proposal.approvals.length;
+                let requiredVotes = totalVoters;
+
+                if (activeMode === MODE_MAJORITY)
+                  requiredVotes = Math.floor(totalVoters / 2) + 1;
+                else if (activeMode === 2)
+                  requiredVotes = Math.ceil((2 * totalVoters) / 3);
+                else if (activeMode === 3)
+                  requiredVotes = totalVoters;
+
+                const now = Math.floor(Date.now() / 1000);
+                const timelockPassed = now >= proposal.earliest_execution_time;
+                const notExpired = proposal.expiry_time === 0 || now <= proposal.expiry_time;
+
+                const voteDisabled =
+                  proposal.is_executed ||
+                  (walletData.only_admins_can_vote && !isAdmin) ||
+                  !timelockPassed ||
+                  !notExpired;
+
+                return (
+                  <div key={proposal.id} style={s.proposalCard}>
+                    <div style={{ flex: 1 }}>
+                      <p><b>ID:</b> {proposal.id}</p>
+                      <p><b>Creator:</b> {proposal.creator}</p>
+                      <p><b>Recipient:</b> {proposal.recipient}</p>
+                      <p><b>Amount:</b> {formatApt(proposal.amount)} APT</p>
+                      <p>
+                        <b>Earliest Execution:</b>{" "}
+                        {new Date(proposal.earliest_execution_time * 1000).toLocaleString()}
+                      </p>
+                      <p>
+                        <b>Expiry:</b>{" "}
+                        {proposal.expiry_time === 0
+                          ? "No expiry"
+                          : new Date(proposal.expiry_time * 1000).toLocaleString()}
+                      </p>
+                    </div>
+
+                    <div style={{ width: 260 }}>
+                      {proposal.is_executed ? (
+                        <p style={{ fontWeight: 600 }}>
+                          Executed with {approvalsCount} votes
+                        </p>
+                      ) : (
+                        <p style={{ fontWeight: 600 }}>
+                          Votes: {approvalsCount}/{requiredVotes}
+                        </p>
+                      )}
+
+                      <button
+                        style={s.secondaryButton}
+                        onClick={() =>
+                          setExpandedApprovals(
+                            expandedApprovals === proposal.id
+                              ? null
+                              : proposal.id
+                          )
+                        }
+                      >
+                        View Approvals
+                      </button>
+
+                      {expandedApprovals === proposal.id && (
+                        <ul style={s.ownersList}>
+                          {proposal.approvals.map((addr: string) => (
+                            <li key={addr} style={s.ownerItem}>{addr}</li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {!proposal.is_executed && (
+                        <button
+                          style={{
+                            ...s.primaryButton,
+                            marginTop: 8,
+                            opacity: voteDisabled ? 0.5 : 1,
+                            cursor: voteDisabled ? "not-allowed" : "pointer"
+                          }}
+                          disabled={voteDisabled}
+                          onClick={() => handleVote(proposal.id)}
+                        >
+                          Vote
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+            <div style={s.modalButtons}>
+              <button
+                style={s.secondaryButton}
+                onClick={() => setShowProposalsModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+     )}
+
     </div>
+
+    
   );
 
 }

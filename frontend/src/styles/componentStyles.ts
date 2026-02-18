@@ -247,4 +247,24 @@ export const walletStyles = {
     textAlign: "center" as const,
     boxShadow: "0 6px 20px rgba(0,0,0,0.05)",
   },
+
+  proposalsModal: {
+  backgroundColor: "white",
+  padding: "32px",
+  borderRadius: "20px",
+  width: "85%",
+  maxHeight: "85vh",
+  overflowY: "auto",
+} as const,
+
+proposalCard: {
+  border: "1px solid #e2e8f0",
+  borderRadius: "16px",
+  padding: "20px",
+  marginBottom: "20px",
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "24px",
+  boxShadow: "0 6px 20px rgba(0,0,0,0.05)",
+},
 };

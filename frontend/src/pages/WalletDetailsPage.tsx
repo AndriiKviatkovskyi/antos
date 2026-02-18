@@ -71,6 +71,7 @@ export function WalletDetailsPage() {
   const [proposalAmount, setProposalAmount] = useState("");
   const [proposalTimelock, setProposalTimelock] = useState("");
   const [proposalExecWindow, setProposalExecWindow] = useState("");
+  const [proposalError, setProposalError] = useState<string | null>(null);
 
   const formatApt = (octas: string | number) => (Number(octas)/1e8).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 3 });
 
@@ -288,6 +289,32 @@ export function WalletDetailsPage() {
     ? calculateLimit(walletData.monthly_limit, 30)
     : null;
 
+  const proposalAmountOctas = proposalAmount
+    ? Math.floor(Number(proposalAmount) * 1e8)
+    : 0;
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+
+  let timelockSeconds;
+  let timelockAbsolute = nowSeconds;
+
+  if (proposalTimelock) {
+    const selected = Math.floor(new Date(proposalTimelock).getTime() / 1000);
+    if (selected > nowSeconds) {
+      timelockSeconds = selected - nowSeconds;
+      timelockAbsolute = selected;
+    }
+  }
+
+  let executionWindow;
+
+  if (proposalExecWindow && proposalTimelock) {
+    const execTime = Math.floor(new Date(proposalExecWindow).getTime() / 1000);
+    if (execTime > timelockAbsolute) {
+      executionWindow = execTime - timelockAbsolute;
+    }
+  }
+
   function openUpdateLimitsModal() {
     if (!walletData) return;
 
@@ -422,7 +449,7 @@ export function WalletDetailsPage() {
   }
 
   async function handleProposeTransfer() {
-    if (!account || !address || !proposalRecipient || !proposalAmount) return;
+    if (!account || !address || !proposalRecipient || !proposalAmount || proposalError) return;
 
     try {
       setStatus("Creating proposal...");
@@ -476,6 +503,71 @@ export function WalletDetailsPage() {
       setStatus("Failed to create proposal.");
     }
   }
+
+  useEffect(() => {
+    if (!walletData) return;
+
+    setProposalError(null);
+
+    if (!proposalRecipient) return;
+
+    const whitelistEnabled = walletData.whitelist_enabled;
+
+    setRecipientWhitelist(walletData.recipient_whitelist || []);
+    setRecipientBlacklist(walletData.recipient_blacklist || []);
+
+
+    // Whitelist / blacklist logic
+    if (whitelistEnabled) {
+      if (!recipientWhitelist.includes(proposalRecipient)) {
+        setProposalError("Recipient not in whitelist.");
+        return;
+      }
+    } else {
+      if (recipientBlacklist.includes(proposalRecipient)) {
+        setProposalError("Recipient is blacklisted.");
+        return;
+      }
+    }
+
+    // Execution window validation
+    if (proposalExecWindow && proposalTimelock) {
+      const execTime = new Date(proposalExecWindow).getTime();
+      const timelockTime = new Date(proposalTimelock).getTime();
+
+      if (execTime <= timelockTime) {
+        setProposalError("Execution deadline must be after timelock.");
+        return;
+      }
+    }
+
+    // Limits validation
+    if (proposalAmountOctas > 0) {
+      const limits = [
+        { name: "Daily", data: daily },
+        { name: "Weekly", data: weekly },
+        { name: "Monthly", data: monthly },
+      ];
+
+      for (const limit of limits) {
+        if (limit.data?.hasLimit) {
+          if (
+            limit.data.accumulated + proposalAmountOctas >
+            limit.data.max
+          ) {
+            setProposalError(`${limit.name} limit exceeded.`);
+            return;
+          }
+        }
+      }
+    }
+  }, [
+    proposalRecipient,
+    proposalAmount,
+    proposalTimelock,
+    proposalExecWindow,
+    walletData,
+  ]);
 
   return (
     <div style={s.container}>
@@ -1172,6 +1264,10 @@ export function WalletDetailsPage() {
               value={proposalExecWindow}
               onChange={(e) => setProposalExecWindow(e.target.value)}
             />
+
+            {proposalError && (
+              <p style={s.errorText}>{proposalError}</p>
+            )}
 
             <div style={s.modalButtons}>
               <button

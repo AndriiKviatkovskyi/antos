@@ -1298,7 +1298,7 @@ export function WalletDetailsPage() {
               ?.slice()
               .reverse()
               .map((proposal: any) => {
-                const totalVoters = walletData.owners.length;
+                const totalVoters = walletData.only_admins_can_vote ? walletData.admins.length : walletData.owners.length;
                 let activeMode = walletData.voting_mode;
 
                 if (activeMode === MODE_COMBINED) {

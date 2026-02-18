@@ -63,6 +63,15 @@ export function WalletDetailsPage() {
   const [monthlyLimitInput, setMonthlyLimitInput] = useState("");
   const [showLeaveModal, setShowLeaveModal] = useState(false);
 
+  const [showKickModal, setShowKickModal] = useState(false);
+  const [ownerToKick, setOwnerToKick] = useState<string | null>(null);
+  const [showProposeModal, setShowProposeModal] = useState(false);
+  
+  const [proposalRecipient, setProposalRecipient] = useState("");
+  const [proposalAmount, setProposalAmount] = useState("");
+  const [proposalTimelock, setProposalTimelock] = useState("");
+  const [proposalExecWindow, setProposalExecWindow] = useState("");
+
   const formatApt = (octas: string | number) => (Number(octas)/1e8).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 3 });
 
   async function fetchData() {
@@ -89,8 +98,6 @@ export function WalletDetailsPage() {
   const isLastAdmin = isAdmin && walletData?.admins?.length === 1;
   const walletFull = walletData && walletData.owners.length >= walletData.max_owners;
   const isBlacklisted = walletData && walletData.membership_blacklist?.some((addr: string) => addr.toLowerCase() === inviteAddress.toLowerCase());
-  const [showKickModal, setShowKickModal] = useState(false);
-  const [ownerToKick, setOwnerToKick] = useState<string | null>(null);
 
 
   async function handleInvite() {
@@ -414,6 +421,62 @@ export function WalletDetailsPage() {
     }
   }
 
+  async function handleProposeTransfer() {
+    if (!account || !address || !proposalRecipient || !proposalAmount) return;
+
+    try {
+      setStatus("Creating proposal...");
+
+      const nowSeconds = Math.floor(Date.now() / 1000);
+
+      // Amount APT → Octas
+      const amountOctas = Math.floor(Number(proposalAmount) * 1e8);
+
+      // Timelock conversion
+      let timelockSeconds = 0;
+      if (proposalTimelock) {
+        const selected = Math.floor(new Date(proposalTimelock).getTime() / 1000);
+        timelockSeconds = selected > nowSeconds ? selected - nowSeconds : 0;
+      }
+
+      // Execution window conversion
+      let executionWindow = 0;
+      if (proposalExecWindow && proposalTimelock) {
+        const execTime = Math.floor(new Date(proposalExecWindow).getTime() / 1000);
+        const timelockAbs = nowSeconds + timelockSeconds;
+        executionWindow = execTime > timelockAbs ? execTime - timelockAbs : 0;
+      }
+
+      const payload: InputEntryFunctionData = {
+        function: `${MULTISIG_MODULE}::propose_transfer`,
+        typeArguments: [],
+        functionArguments: [
+          address,
+          proposalRecipient,
+          amountOctas,
+          timelockSeconds,
+          executionWindow,
+        ],
+      };
+
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+
+      setShowProposeModal(false);
+      setProposalRecipient("");
+      setProposalAmount("");
+      setProposalTimelock("");
+      setProposalExecWindow("");
+
+      await fetchData();
+
+      setStatus("Proposal created successfully.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Failed to create proposal.");
+    }
+  }
+
   return (
     <div style={s.container}>
       {status && <p style={s.statusText}>{status}</p>}
@@ -545,6 +608,32 @@ export function WalletDetailsPage() {
                   })}
                 </ul>
               )}
+
+              <div style={{ marginTop: 16 }}>
+                <button
+                  style={{
+                    ...s.primaryButton,
+                    opacity:
+                      walletData.only_admins_can_initiate && !isAdmin ? 0.5 : 1,
+                    cursor:
+                      walletData.only_admins_can_initiate && !isAdmin
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                  disabled={
+                    walletData.only_admins_can_initiate && !isAdmin
+                  }
+                  onClick={() => setShowProposeModal(true)}
+                >
+                  Initiate Proposal
+                </button>
+
+                {walletData.only_admins_can_initiate && !isAdmin && (
+                  <p style={s.errorText}>
+                    Only admins can initiate proposals.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1039,6 +1128,62 @@ export function WalletDetailsPage() {
                   setShowKickModal(false);
                   setOwnerToKick(null);
                 }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= PROPOSE TRANSFER MODAL ================= */}
+      {showProposeModal && (
+        <div style={s.modalOverlay}>
+          <div style={s.modal}>
+            <h3>Create Transfer Proposal</h3>
+
+            <input
+              style={s.input}
+              placeholder="Recipient address (0x...)"
+              value={proposalRecipient}
+              onChange={(e) => setProposalRecipient(e.target.value)}
+            />
+
+            <input
+              style={s.input}
+              type="number"
+              placeholder="Amount (APT)"
+              value={proposalAmount}
+              onChange={(e) => setProposalAmount(e.target.value)}
+            />
+
+            <label>Optional Timelock (Earliest execution time)</label>
+            <input
+              style={s.input}
+              type="datetime-local"
+              value={proposalTimelock}
+              onChange={(e) => setProposalTimelock(e.target.value)}
+            />
+
+            <label>Optional Execution Deadline</label>
+            <input
+              style={s.input}
+              type="datetime-local"
+              value={proposalExecWindow}
+              onChange={(e) => setProposalExecWindow(e.target.value)}
+            />
+
+            <div style={s.modalButtons}>
+              <button
+                style={s.primaryButton}
+                onClick={handleProposeTransfer}
+              >
+                Propose
+              </button>
+
+              <button
+                style={s.secondaryButton}
+                onClick={() => setShowProposeModal(false)}
               >
                 Cancel
               </button>

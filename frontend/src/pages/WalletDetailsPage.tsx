@@ -10,6 +10,10 @@ import { formatApt, fromOctas, toOctas } from "../utils/formatters";
 import { hexToString, bytesToHex } from "../utils/aptosHelpers";
 import { calculateLimit } from "../utils/limitCalculator";
 
+import OwnerPanel from "../components/OwnerPanel";
+import { WalletInfo } from "../components/WalletInfo";
+import { AdminPanel } from "../components/AdminPanel";
+
 
 const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
 
@@ -22,9 +26,8 @@ export function WalletDetailsPage() {
   const currentUserHex = account?.address?.data ? bytesToHex(account.address.data) : null;
 
   const [walletData, setWalletData] = useState<any | null>(null);
-  const [balance, setBalance] = useState<string | null>(null);
+  const [balance, setBalance] = useState<number | null>(null);
   const [status, setStatus] = useState("Loading...");
-  const [showOwners, setShowOwners] = useState(false);
 
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteAddress, setInviteAddress] = useState("");
@@ -569,211 +572,39 @@ export function WalletDetailsPage() {
       {walletData && (
         <div style={s.pageGrid}>
           {/* OWNER PANEL */}
-          <div style={s.sideBox}>
-            <div style={s.sideHeader}>Owner Functions</div>
-            <div style={s.sideBody}>
-              {isOwner ? (
-                <>
-                  <button
-                    style={s.primaryButton}
-                    onClick={() => setShowFundModal(true)}
-                  >
-                    Fund Wallet
-                  </button>
-
-                  <div style={{ height: 12 }} />
-
-                  <button
-                    style={s.primaryButton}
-                    onClick={() => setShowLimitsModal(true)}
-                  >
-                    View Limits
-                  </button>
-
-                  <div style={{ height: 12 }} />
-
-                  <button
-                    style={{
-                      ...s.secondaryButton,
-                      backgroundColor: "#ed1b1b",
-                      border: "1px solid #a33",
-                    }}
-                    disabled={isLastAdmin}
-                    onClick={() => setShowLeaveModal(true)}
-                  >
-                    Leave Wallet
-                  </button>
-
-                  {isLastAdmin && (
-                    <p style={s.errorText}>
-                      You cannot leave — you are the last admin.
-                    </p>
-                  )}
-                </>
-              ) : (
-                <p>Sorry, you're not this wallet's owner</p>
-              )}
-            </div>
-          </div>
+          <OwnerPanel
+            isOwner={isOwner}
+            isLastAdmin={isLastAdmin}
+            onShowFundModal={() => setShowFundModal(true)}
+            onShowLimitsModal={() => setShowLimitsModal(true)}
+            onShowLeaveModal={() => setShowLeaveModal(true)}
+            styles={s}
+          />
 
           {/* CENTER WALLET INFO */}
-          <div style={s.walletBox}>
-            <div
-              style={{
-                ...s.walletHeader,
-                ...(walletData.is_charity
-                  ? s.walletHeaderCharity
-                  : s.walletHeaderNormal),
-              }}
-            >
-              <div>
-                <div style={s.walletName}>{walletData.name}</div>
-                <div style={s.walletAddress}>{address}</div>
-              </div>
-            </div>
-
-            <div style={s.walletBody}>
-              <div>
-                APT Balance: {balance ? `${formatApt(balance)} APT` : "N/A"}
-              </div>
-
-              <div
-                style={s.ownersHeader}
-                onClick={() => setShowOwners(!showOwners)}
-              >
-                {showOwners ? "▼" : "▶"} Owners (
-                {walletData.owners.length}/{walletData.max_owners})
-              </div>
-
-              {showOwners && (
-                <ul style={s.ownersList}>
-                  {walletData.owners.map((owner: string) => {
-                    const ownerIsAdmin = walletData.admins.includes(owner);
-
-                    const canKick =
-                      isAdmin &&                // current user is admin
-                      !ownerIsAdmin &&          // target is not admin
-                      owner.toLowerCase() !== currentUserHex?.toLowerCase(); // cannot kick self
-
-                    return (
-                      <li
-                        key={owner}
-                        style={{
-                          ...s.ownerItem,
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
-                      >
-                        <span>
-                          {owner}
-                          {ownerIsAdmin && <span style={s.adminStar}>★</span>}
-                        </span>
-
-                        {canKick && (
-                          <button
-                            style={{
-                              ...s.secondaryButton,
-                              backgroundColor: "#fee2e2",
-                              border: "1px solid #ef4444",
-                              color: "#b91c1c",
-                              padding: "4px 10px",
-                              fontSize: "12px",
-                            }}
-                            onClick={() => {
-                              setOwnerToKick(owner);
-                              setShowKickModal(true);
-                            }}
-                          >
-                            Kick
-                          </button>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-
-              <div style={{ marginTop: 16 }}>
-                <button
-                  style={{
-                    ...s.primaryButton,
-                    opacity:
-                      walletData.only_admins_can_initiate && !isAdmin ? 0.5 : 1,
-                    cursor:
-                      walletData.only_admins_can_initiate && !isAdmin
-                        ? "not-allowed"
-                        : "pointer",
-                  }}
-                  disabled={
-                    walletData.only_admins_can_initiate && !isAdmin
-                  }
-                  onClick={() => setShowProposeModal(true)}
-                >
-                  Initiate Proposal
-                </button>
-
-                <button
-                  style={s.secondaryButton}
-                  onClick={() => setShowProposalsModal(true)}
-                >
-                  View Proposals
-                </button>
-
-                {walletData.only_admins_can_initiate && !isAdmin && (
-                  <p style={s.errorText}>
-                    Only admins can initiate proposals.
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
+          <WalletInfo
+            walletData={walletData}
+            address={address || ""}
+            balance={balance}
+            currentUserHex={currentUserHex || ""}
+            isAdmin={isAdmin}
+            formatApt={formatApt}
+            styles={s}
+            onShowProposeModal={() => setShowProposeModal(true)}
+            onShowProposalsModal={() => setShowProposalsModal(true)}
+            setOwnerToKick={setOwnerToKick}
+            setShowKickModal={setShowKickModal}
+          />
 
           {/* ADMIN PANEL */}
-          <div style={s.sideBox}>
-            <div style={s.sideHeader}>Admin Functions</div>
-            <div style={s.sideBody}>
-              {isAdmin ? (
-                <>
-                  <button
-                    style={s.primaryButton}
-                    onClick={() => setShowInviteModal(true)}
-                  >
-                    Invite user
-                  </button>
-
-                  <div style={{ height: 12 }} />
-
-                  <button
-                    style={s.primaryButton}
-                    onClick={openGovernanceModal}
-                  >
-                    Governance config
-                  </button>
-
-                  <div style={{ height: 12 }} />
-
-                  <button
-                    style={s.primaryButton}
-                    onClick={openListsModal}
-                  >
-                    Manage Lists
-                  </button>
-
-                  <div style={{ height: 12 }} />
-
-                  <button
-                    style={s.primaryButton}
-                    onClick={openUpdateLimitsModal}
-                  >
-                    Update Limits
-                  </button>
-                </>
-              ) : (
-                <p>Sorry, you're not this wallet's admin</p>
-              )}
-            </div>
-          </div>
+          <AdminPanel
+            isAdmin={isAdmin}
+            styles={s}
+            setShowInviteModal={setShowInviteModal}
+            openGovernanceModal={openGovernanceModal}
+            openListsModal={openListsModal}
+            openUpdateLimitsModal={openUpdateLimitsModal}
+          />
         </div>
       )}
 

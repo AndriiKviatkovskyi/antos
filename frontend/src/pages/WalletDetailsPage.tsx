@@ -6,34 +6,15 @@ import { walletStyles as s } from "../styles/componentStyles";
 import { MULTISIG_MODULE } from "../constants";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 
+import { formatApt, fromOctas, toOctas } from "../utils/formatters";
+import { hexToString, bytesToHex } from "../utils/aptosHelpers";
+import { calculateLimit } from "../utils/limitCalculator";
+
+
 const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
 
 const MODE_MAJORITY = 1;
 const MODE_COMBINED = 4;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-const hexToString = (hex: string) => {
-  try {
-    const cleanHex = hex.startsWith("0x") ? hex.slice(2) : hex;
-    if (!cleanHex) return "";
-    return new TextDecoder().decode(new Uint8Array(cleanHex.match(/.{1,2}/g)!.map(b => parseInt(b, 16))));
-  } catch { return hex; }
-};
-
-const bytesToHex = (bytes: Uint8Array) =>
-  "0x" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
-
-const formatApt = (octas: string | number) => {
-  const value = Number(octas) / 1e8;
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 3,
-  });
-};
-
-const fromOctas = (octas: string | number | undefined) => 
-  octas ? (Number(octas) / 1e8).toString() : "0";
-const toOctas = (apt: string | number) => Math.floor(Number(apt || 0) * 1e8);
 
 export function WalletDetailsPage() {
   const { address } = useParams<{ address: string }>();
@@ -281,65 +262,6 @@ export function WalletDetailsPage() {
       console.error(e);
       setStatus("Funding transaction failed.");
     }
-  }
-
-  function calculateLimit(
-    tracker: any,
-    periodDays: number
-  ):
-    | {
-        hasLimit: true;
-        elapsed: number;
-        accumulated: number;
-        max: number;
-      }
-    | {
-        hasLimit: false;
-      } {
-
-    if (!tracker) return { hasLimit: false };
-    const maxVec = tracker.max_amount?.vec;
-
-    if (!maxVec || maxVec.length === 0) {
-      return { hasLimit: false };
-    }
-
-    const max = Number(maxVec[0]);
-    const accumulated = Number(tracker.accumulated_amount);
-
-    const now = Date.now();
-    const lastReset = Number(tracker.last_reset_timestamp) * 1000;
-    const diff = now - lastReset;
-
-    const periodMs = periodDays * DAY_MS;
-
-    if (diff >= periodMs) {
-      return {
-        hasLimit: true,
-        elapsed: 0,
-        accumulated: 0,
-        max,
-      };
-    }
-
-    if (periodDays === 1) {
-      const hours = Math.floor(diff / (60 * 60 * 1000));
-      return {
-        hasLimit: true,
-        elapsed: hours,
-        accumulated,
-        max,
-      };
-    }
-
-    const days = Math.floor(diff / DAY_MS);
-
-    return {
-      hasLimit: true,
-      elapsed: days,
-      accumulated,
-      max,
-    };
   }
 
   const daily = walletData

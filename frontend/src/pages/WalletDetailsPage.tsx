@@ -517,6 +517,27 @@ export function WalletDetailsPage() {
     }
   }
 
+  async function joinCharityWallet() {
+    if (!account || !address) return;
+
+    const payload: InputEntryFunctionData = {
+      function: `${MULTISIG_MODULE}::join_charity_wallet`,
+      typeArguments: [],
+      functionArguments: [address],
+    };
+
+    try {
+      setStatus("Joining charity wallet...");
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+      await fetchData();
+      setStatus("Successfully joined charity wallet!");
+    } catch (e) {
+      console.error(e);
+      setStatus("Failed to join charity wallet.");
+    }
+  }
+
   useEffect(() => {
     if (!walletData) return;
     setProposalError(null);
@@ -605,6 +626,7 @@ export function WalletDetailsPage() {
             onShowProposalsModal={() => setShowProposalsModal(true)}
             setOwnerToKick={setOwnerToKick}
             setShowKickModal={setShowKickModal}
+            joinCharityWallet={joinCharityWallet}
           />
 
           {/* ADMIN PANEL */}

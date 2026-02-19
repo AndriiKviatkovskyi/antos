@@ -13,6 +13,7 @@ interface WalletInfoProps {
   onShowProposalsModal: () => void;
   setOwnerToKick: (owner: string) => void;
   setShowKickModal: (show: boolean) => void;
+  joinCharityWallet: () => void; // NEW prop
 }
 
 export const WalletInfo: React.FC<WalletInfoProps> = ({
@@ -28,8 +29,61 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
   onShowProposalsModal,
   setOwnerToKick,
   setShowKickModal,
+  joinCharityWallet,
 }) => {
   const [showOwners, setShowOwners] = useState(false);
+
+  if (!isOwner) {
+    if (walletData.is_charity) {
+      return (
+        <div style={s.walletBox}>
+          <div
+            style={{
+              ...s.walletHeader,
+              ...s.walletHeaderCharity,
+            }}
+          >
+            <div>
+              <div style={s.walletName}>{walletData.name}</div>
+              <div style={s.walletAddress}>{address}</div>
+            </div>
+          </div>
+
+          <div style={{ padding: 16, textAlign: "center" }}>
+            <button
+              style={{
+                ...s.primaryButton,
+                backgroundColor: "#22c55e", // green
+                color: "white",
+                padding: "10px 20px",
+                fontSize: "16px",
+                cursor: "pointer",
+              }}
+              onClick={joinCharityWallet}
+            >
+              Join Charity Wallet
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div style={s.walletBox}>
+        <div
+          style={{
+            ...s.walletHeader,
+            ...s.walletHeaderNormal,
+          }}
+        >
+          <div>
+            <div style={s.walletName}>{walletData.name}</div>
+            <div style={s.walletAddress}>{address}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={s.walletBox}>
@@ -48,8 +102,10 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
       </div>
 
       <div style={s.walletBody}>
+        {/* Balance */}
         <div>Apt Balance: {balance ? `${formatApt(balance)} APT` : "N/A"}</div>
 
+        {/* Owners list */}
         <div style={s.ownersHeader} onClick={() => setShowOwners(!showOwners)}>
           {showOwners ? "▼" : "▶"} Owners (
           {walletData.owners.length}/{walletData.max_owners})
@@ -59,7 +115,6 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
           <ul style={s.ownersList}>
             {walletData.owners.map((owner: string) => {
               const ownerIsAdmin = walletData.admins.includes(owner);
-
               const canKick =
                 isAdmin &&
                 !ownerIsAdmin &&
@@ -104,32 +159,31 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
           </ul>
         )}
 
-        {isOwner && (
-          <div style={{ marginTop: 16 }}>
-            <button
-              style={{
-                ...s.primaryButton,
-                opacity: walletData.only_admins_can_initiate && !isAdmin ? 0.5 : 1,
-                cursor:
-                  walletData.only_admins_can_initiate && !isAdmin
-                    ? "not-allowed"
-                    : "pointer",
-              }}
-              disabled={walletData.only_admins_can_initiate && !isAdmin}
-              onClick={onShowProposeModal}
-            >
-              Initiate Proposal
-            </button>
+        {/* Proposal buttons */}
+        <div style={{ marginTop: 16 }}>
+          <button
+            style={{
+              ...s.primaryButton,
+              opacity: walletData.only_admins_can_initiate && !isAdmin ? 0.5 : 1,
+              cursor:
+                walletData.only_admins_can_initiate && !isAdmin
+                  ? "not-allowed"
+                  : "pointer",
+            }}
+            disabled={walletData.only_admins_can_initiate && !isAdmin}
+            onClick={onShowProposeModal}
+          >
+            Initiate Proposal
+          </button>
 
-            <button style={s.secondaryButton} onClick={onShowProposalsModal}>
-              View Proposals
-            </button>
+          <button style={s.secondaryButton} onClick={onShowProposalsModal}>
+            View Proposals
+          </button>
 
-            {walletData.only_admins_can_initiate && !isAdmin && (
-              <p style={s.errorText}>Only admins can initiate proposals.</p>
-            )}
-          </div>
-        )}
+          {walletData.only_admins_can_initiate && !isAdmin && (
+            <p style={s.errorText}>Only admins can initiate proposals.</p>
+          )}
+        </div>
       </div>
     </div>
   );

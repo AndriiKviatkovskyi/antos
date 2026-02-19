@@ -13,6 +13,16 @@ import { calculateLimit } from "../utils/limitCalculator";
 import OwnerPanel from "../components/OwnerPanel";
 import { WalletInfo } from "../components/WalletInfo";
 import { AdminPanel } from "../components/AdminPanel";
+import InviteModal from "../components/modals/InviteModal";
+import GovernanceModal from "../components/modals/GovernanceModal";
+import ListsModal from "../components/modals/ListsModal";
+import FundModal from "../components/modals/FundModal";
+import LimitsModal from "../components/modals/LimitsModal";
+import UpdateLimitsModal from "../components/modals/UpdateLimitsModal";
+import LeaveWalletModal from "../components/modals/LeaveWalletModal";
+import KickOwnerModal from "../components/modals/KickOwnersModal";
+import ProposeTransferModal from "../components/modals/ProposeTransferModal";
+import ProposalsModal from "../components/modals/ProposalsModal";
 
 
 const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
@@ -68,7 +78,7 @@ export function WalletDetailsPage() {
   const [proposalError, setProposalError] = useState<string | null>(null);
 
   const [showProposalsModal, setShowProposalsModal] = useState(false);
-  const [expandedApprovals, setExpandedApprovals] = useState<number | null>(null);
+  const [expandedApprovals, setExpandedApprovals] = useState<string | number | null>(null);
 
   async function fetchData() {
     if (!address) return;
@@ -484,7 +494,7 @@ export function WalletDetailsPage() {
     }
   }
 
-  async function handleVote(proposalId: number) {
+  async function handleVote(proposalId: number | string) {
     if (!account || !address) return;
 
     try {
@@ -609,639 +619,141 @@ export function WalletDetailsPage() {
       )}
 
       {/* ================= INVITE MODAL ================= */}
-      {showInviteModal && (
-        <div style={s.modalOverlay}>
-          <div style={s.modal}>
-            {walletFull ? (
-              <p>Wallet is full</p>
-            ) : (
-              <>
-                <h3>Invite User</h3>
-                <input
-                  style={s.input}
-                  placeholder="0x..."
-                  value={inviteAddress}
-                  onChange={(e) => setInviteAddress(e.target.value)}
-                />
-                <select
-                  style={s.select}
-                  value={inviteRole}
-                  onChange={(e) =>
-                    setInviteRole(e.target.value as "owner" | "admin")
-                  }
-                >
-                  <option value="owner">Owner</option>
-                  <option value="admin">Admin</option>
-                </select>
-
-                {isBlacklisted && (
-                  <p style={s.errorText}>
-                    Alert! This user is blacklisted from joining the wallet
-                  </p>
-                )}
-
-                <div style={s.modalButtons}>
-                  <button
-                    style={s.primaryButton}
-                    disabled={isBlacklisted}
-                    onClick={handleInvite}
-                  >
-                    Invite
-                  </button>
-                  <button
-                    style={s.secondaryButton}
-                    onClick={() => setShowInviteModal(false)}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      <InviteModal
+        show={showInviteModal}
+        walletFull={walletFull}
+        inviteAddress={inviteAddress}
+        inviteRole={inviteRole}
+        isBlacklisted={isBlacklisted}
+        setInviteAddress={setInviteAddress}
+        setInviteRole={setInviteRole}
+        setShow={setShowInviteModal}
+        handleInvite={handleInvite}
+        styles={s}
+      />
 
       {/* ================= GOVERNANCE MODAL ================= */}
-      {showGovernanceModal && (
-        <div style={s.modalOverlay}>
-          <div style={s.modal}>
-            <h3>Governance Configuration</h3>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={onlyAdminsInitiate}
-                  onChange={(e) => setOnlyAdminsInitiate(e.target.checked)}
-                />{" "}
-                Only Admins Can Initiate
-              </label>
-
-              <label>
-                <input
-                  type="checkbox"
-                  checked={onlyAdminsVote}
-                  onChange={(e) => setOnlyAdminsVote(e.target.checked)}
-                />{" "}
-                Only Admins Can Vote
-              </label>
-
-              <label>
-                <input
-                  type="checkbox"
-                  checked={adminsCanVeto}
-                  onChange={(e) => setAdminsCanVeto(e.target.checked)}
-                />{" "}
-                Admins Can Veto
-              </label>
-            </div>
-
-            <select
-              style={s.select}
-              value={votingMode}
-              onChange={(e) => setVotingMode(Number(e.target.value))}
-            >
-              <option value={1}>Majority</option>
-              <option value={2}>Two Thirds</option>
-              <option value={3}>Unanimous</option>
-              <option value={4}>Combined</option>
-            </select>
-
-            {votingMode === MODE_COMBINED && (
-              <>
-                <input
-                  style={s.input}
-                  type="number"
-                  placeholder="Tier Two Threshold (APT)"
-                  value={tierTwo}
-                  onChange={(e) => setTierTwo(e.target.value)}
-                />
-                <input
-                  style={s.input}
-                  type="number"
-                  placeholder="Tier Three Threshold (APT)"
-                  value={tierThree}
-                  onChange={(e) => setTierThree(e.target.value)}
-                />
-              </>
-            )}
-
-            <div style={s.modalButtons}>
-              <button
-                style={s.primaryButton}
-                onClick={handleGovernanceUpdate}
-              >
-                Change
-              </button>
-              <button
-                style={s.secondaryButton}
-                onClick={() => setShowGovernanceModal(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <GovernanceModal
+        show={showGovernanceModal}
+        onlyAdminsInitiate={onlyAdminsInitiate}
+        onlyAdminsVote={onlyAdminsVote}
+        adminsCanVeto={adminsCanVeto}
+        votingMode={votingMode}
+        MODE_COMBINED={MODE_COMBINED}
+        tierTwo={tierTwo}
+        tierThree={tierThree}
+        setOnlyAdminsInitiate={setOnlyAdminsInitiate}
+        setOnlyAdminsVote={setOnlyAdminsVote}
+        setAdminsCanVeto={setAdminsCanVeto}
+        setVotingMode={setVotingMode}
+        setTierTwo={setTierTwo}
+        setTierThree={setTierThree}
+        setShow={setShowGovernanceModal}
+        handleGovernanceUpdate={handleGovernanceUpdate}
+        styles={s}
+      />
 
       {/* ================= LISTS MODAL ================= */}
-      {showListsModal && (
-        <div style={s.modalOverlay}>
-          <div style={s.listsModal}>
-            <h3>Lists Management</h3>
-
-            <div style={{ marginBottom: 12 }}>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={useWhitelist}
-                  onChange={handleToggleRecipientMode}
-                />{" "}
-                Recipient Whitelist Mode
-              </label>
-            </div>
-
-            <h4>Membership Blacklist</h4>
-            <ul style={s.ownersList}>
-              {membershipBlacklist.map((addr) => (
-                <li key={addr} style={s.ownerItem}>
-                  {addr}
-                  <button
-                    style={s.secondaryButton}
-                    onClick={() =>
-                      handleRemoveFromList("membership", addr)
-                    }
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-
-            <input
-              style={s.input}
-              placeholder="0x..."
-              value={newListAddress}
-              onChange={(e) => setNewListAddress(e.target.value)}
-            />
-
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <button
-                style={s.primaryButton}
-                onClick={() => handleAddToList("membership")}
-              >
-                Add to Membership Blacklist
-              </button>
-              <button
-                style={s.primaryButton}
-                onClick={() => handleAddToList("recipient")}
-              >
-                Add to Recipient List
-              </button>
-            </div>
-
-            <h4>
-              Recipient List ({useWhitelist ? "Whitelist" : "Blacklist"})
-            </h4>
-
-            <ul style={s.ownersList}>
-              {(useWhitelist
-                ? recipientWhitelist
-                : recipientBlacklist
-              ).map((addr) => (
-                <li key={addr} style={s.ownerItem}>
-                  {addr}
-                  <button
-                    style={s.secondaryButton}
-                    onClick={() =>
-                      handleRemoveFromList("recipient", addr)
-                    }
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-
-            <div style={s.modalButtons}>
-              <button
-                style={s.secondaryButton}
-                onClick={async () => {
-                  setShowListsModal(false);
-                  await fetchData();
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ListsModal
+        show={showListsModal}
+        useWhitelist={useWhitelist}
+        membershipBlacklist={membershipBlacklist}
+        recipientWhitelist={recipientWhitelist}
+        recipientBlacklist={recipientBlacklist}
+        newListAddress={newListAddress}
+        setShow={setShowListsModal}
+        setNewListAddress={setNewListAddress}
+        handleToggleRecipientMode={handleToggleRecipientMode}
+        handleAddToList={handleAddToList}
+        handleRemoveFromList={handleRemoveFromList}
+        fetchData={fetchData}
+        styles={s}
+      />
 
       {/* ================= FUND MODAL ================= */}
-      {showFundModal && (
-        <div style={s.modalOverlay}>
-          <div style={s.modal}>
-            <h3>Fund Wallet</h3>
-
-            <input
-              style={s.input}
-              type="number"
-              placeholder="Amount in APT"
-              value={fundAmount}
-              onChange={(e) => setFundAmount(e.target.value)}
-            />
-
-            <div style={s.modalButtons}>
-              <button
-                style={s.primaryButton}
-                onClick={handleFundWallet}
-              >
-                Send
-              </button>
-              <button
-                style={s.secondaryButton}
-                onClick={() => setShowFundModal(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <FundModal
+        show={showFundModal}
+        fundAmount={fundAmount}
+        setFundAmount={setFundAmount}
+        setShow={setShowFundModal}
+        handleFundWallet={handleFundWallet}
+        styles={s}
+      />
 
       {/* ================= LIMITS MODAL ================= */}
-      {showLimitsModal && daily && weekly && monthly && (
-        <div style={s.modalOverlay}>
-          <div style={s.limitsModal}>
-            <h2>Spending Limits</h2>
-
-            <div style={s.limitsGrid}>
-              {/* DAILY */}
-              <div style={s.limitCard}>
-                <h3>Daily limit</h3>
-
-                {!daily?.hasLimit ? (
-                  <p>No limit</p>
-                ) : (
-                  <>
-                    <p>{daily.elapsed}/24 hours</p>
-                    <p>
-                      {formatApt(daily.accumulated)}/
-                      {formatApt(daily.max)} APT
-                    </p>
-                  </>
-                )}
-              </div>
-
-              {/* WEEKLY */}
-              <div style={s.limitCard}>
-                <h3>Weekly limit</h3>
-
-                {!weekly?.hasLimit ? (
-                  <p>No limit</p>
-                ) : (
-                  <>
-                    <p>{weekly.elapsed}/7 days</p>
-                    <p>
-                      {formatApt(weekly.accumulated)}/
-                      {formatApt(weekly.max)} APT
-                    </p>
-                  </>
-                )}
-              </div>
-
-              {/* MONTHLY */}
-              <div style={s.limitCard}>
-                <h3>Monthly limit</h3>
-
-                {!monthly?.hasLimit ? (
-                  <p>No limit</p>
-                ) : (
-                  <>
-                    <p>{monthly.elapsed}/30 days</p>
-                    <p>
-                      {formatApt(monthly.accumulated)}/
-                      {formatApt(monthly.max)} APT
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div style={s.modalButtons}>
-              <button
-                style={s.secondaryButton}
-                onClick={() => setShowLimitsModal(false)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <LimitsModal
+        show={showLimitsModal}
+        daily={daily}
+        weekly={weekly}
+        monthly={monthly}
+        formatApt={formatApt}
+        setShow={setShowLimitsModal}
+        styles={s}
+      />
 
       {/* ================= UPDATE LIMITS MODAL ================= */}
-      {showUpdateLimitsModal && (
-        <div style={s.modalOverlay}>
-          <div style={s.modal}>
-            <h3>Update Spending Limits</h3>
-
-            <input
-              style={s.input}
-              type="number"
-              placeholder="Daily Limit (APT)"
-              value={dailyLimitInput}
-              onChange={(e) => setDailyLimitInput(e.target.value)}
-            />
-
-            <input
-              style={s.input}
-              type="number"
-              placeholder="Weekly Limit (APT)"
-              value={weeklyLimitInput}
-              onChange={(e) => setWeeklyLimitInput(e.target.value)}
-            />
-
-            <input
-              style={s.input}
-              type="number"
-              placeholder="Monthly Limit (APT)"
-              value={monthlyLimitInput}
-              onChange={(e) => setMonthlyLimitInput(e.target.value)}
-            />
-
-            <div style={s.modalButtons}>
-              <button
-                style={s.primaryButton}
-                onClick={handleUpdateLimits}
-              >
-                Update
-              </button>
-              <button
-                style={s.secondaryButton}
-                onClick={() => setShowUpdateLimitsModal(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <UpdateLimitsModal
+        show={showUpdateLimitsModal}
+        dailyLimitInput={dailyLimitInput}
+        weeklyLimitInput={weeklyLimitInput}
+        monthlyLimitInput={monthlyLimitInput}
+        setDailyLimitInput={setDailyLimitInput}
+        setWeeklyLimitInput={setWeeklyLimitInput}
+        setMonthlyLimitInput={setMonthlyLimitInput}
+        handleUpdateLimits={handleUpdateLimits}
+        setShow={setShowUpdateLimitsModal}
+        styles={s}
+      />
 
       {/* ================= LEAVE WALLET MODAL ================= */}
-      {showLeaveModal && (
-        <div style={s.modalOverlay}>
-          <div style={s.modal}>
-            <h3>Leave Wallet</h3>
+      <LeaveWalletModal
+        show={showLeaveModal}
+        setShow={setShowLeaveModal}
+        handleSelfRemove={handleSelfRemove}
+        styles={s}
+      />
 
-            <p>
-              Are you sure you want to leave this wallet?
-            </p>
-
-            <div style={s.modalButtons}>
-              <button
-                style={{
-                  ...s.primaryButton,
-                  backgroundColor: "#ed1b1b",
-                }}
-                onClick={handleSelfRemove}
-              >
-                Yes, Leave
-              </button>
-
-              <button
-                style={s.secondaryButton}
-                onClick={() => setShowLeaveModal(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {/* ================= KICK OWNER MODAL ================= */}
-      {showKickModal && ownerToKick && (
-        <div style={s.modalOverlay}>
-          <div style={s.modal}>
-            <h3>Remove Owner</h3>
-
-            <p>
-              Are you sure you want to remove:
-            </p>
-
-            <p style={{ fontFamily: "monospace", fontSize: "13px" }}>
-              {ownerToKick}
-            </p>
-
-            <div style={s.modalButtons}>
-              <button
-                style={{
-                  ...s.primaryButton,
-                  backgroundColor: "#ef4444",
-                }}
-                onClick={handleKickOwner}
-              >
-                Yes, Remove
-              </button>
-
-              <button
-                style={s.secondaryButton}
-                onClick={() => {
-                  setShowKickModal(false);
-                  setOwnerToKick(null);
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <KickOwnerModal
+        show={showKickModal}
+        ownerToKick={ownerToKick}
+        setShow={setShowKickModal}
+        setOwnerToKick={setOwnerToKick}
+        handleKickOwner={handleKickOwner}
+        styles={s}
+      />
 
       {/* ================= PROPOSE TRANSFER MODAL ================= */}
-      {showProposeModal && (
-        <div style={s.modalOverlay}>
-          <div style={s.modal}>
-            <h3>Create Transfer Proposal</h3>
-
-            <input
-              style={s.input}
-              placeholder="Recipient address (0x...)"
-              value={proposalRecipient}
-              onChange={(e) => setProposalRecipient(e.target.value)}
-            />
-
-            <input
-              style={s.input}
-              type="number"
-              placeholder="Amount (APT)"
-              value={proposalAmount}
-              onChange={(e) => setProposalAmount(e.target.value)}
-            />
-
-            <label>Optional Timelock (Earliest execution time)</label>
-            <input
-              style={s.input}
-              type="datetime-local"
-              value={proposalTimelock}
-              onChange={(e) => setProposalTimelock(e.target.value)}
-            />
-
-            <label>Optional Execution Deadline</label>
-            <input
-              style={s.input}
-              type="datetime-local"
-              value={proposalExecWindow}
-              onChange={(e) => setProposalExecWindow(e.target.value)}
-            />
-
-            {proposalError && (
-              <p style={s.errorText}>{proposalError}</p>
-            )}
-
-            <div style={s.modalButtons}>
-              <button
-                style={s.primaryButton}
-                onClick={handleProposeTransfer}
-              >
-                Propose
-              </button>
-
-              <button
-                style={s.secondaryButton}
-                onClick={() => setShowProposeModal(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ProposeTransferModal
+        show={showProposeModal}
+        proposalRecipient={proposalRecipient}
+        proposalAmount={proposalAmount}
+        proposalTimelock={proposalTimelock}
+        proposalExecWindow={proposalExecWindow}
+        proposalError={proposalError}
+        setProposalRecipient={setProposalRecipient}
+        setProposalAmount={setProposalAmount}
+        setProposalTimelock={setProposalTimelock}
+        setProposalExecWindow={setProposalExecWindow}
+        handleProposeTransfer={handleProposeTransfer}
+        setShow={setShowProposeModal}
+        styles={s}
+      />
 
       {/* ================= PROPOSALS MODAL ================= */}
-      {showProposalsModal && walletData && (
-        <div style={s.modalOverlay}>
-          <div style={s.proposalsModal}>
-            <h2>All Proposals</h2>
-
-            {walletData.proposals
-              ?.slice()
-              .reverse()
-              .map((proposal: any) => {
-                const totalVoters = walletData.only_admins_can_vote ? walletData.admins.length : walletData.owners.length;
-                let activeMode = walletData.voting_mode;
-
-                if (activeMode === MODE_COMBINED) {
-                  if (proposal.amount < walletData.tier_two_threshold)
-                    activeMode = MODE_MAJORITY;
-                  else if (proposal.amount < walletData.tier_three_threshold)
-                    activeMode = 2;
-                  else activeMode = 3;
-                }
-
-                const approvalsCount = proposal.approvals.length;
-                let requiredVotes = totalVoters;
-
-                if (activeMode === MODE_MAJORITY)
-                  requiredVotes = Math.floor(totalVoters / 2) + 1;
-                else if (activeMode === 2)
-                  requiredVotes = Math.ceil((2 * totalVoters) / 3);
-                else if (activeMode === 3)
-                  requiredVotes = totalVoters;
-
-                const now = Math.floor(Date.now() / 1000);
-                const timelockPassed = now >= proposal.earliest_execution_time;
-                const notExpired = proposal.expiry_time === 0 || now <= proposal.expiry_time;
-
-                const voteDisabled =
-                  proposal.is_executed ||
-                  (walletData.only_admins_can_vote && !isAdmin) ||
-                  !timelockPassed ||
-                  !notExpired;
-
-                return (
-                  <div key={proposal.id} style={s.proposalCard}>
-                    <div style={{ flex: 1 }}>
-                      <p><b>ID:</b> {proposal.id}</p>
-                      <p><b>Creator:</b> {proposal.creator}</p>
-                      <p><b>Recipient:</b> {proposal.recipient}</p>
-                      <p><b>Amount:</b> {formatApt(proposal.amount)} APT</p>
-                      <p>
-                        <b>Earliest Execution:</b>{" "}
-                        {new Date(proposal.earliest_execution_time * 1000).toLocaleString()}
-                      </p>
-                      <p>
-                        <b>Expiry:</b>{" "}
-                        {proposal.expiry_time === 0
-                          ? "No expiry"
-                          : new Date(proposal.expiry_time * 1000).toLocaleString()}
-                      </p>
-                    </div>
-
-                    <div style={{ width: 260 }}>
-                      {proposal.is_executed ? (
-                        <p style={{ fontWeight: 600 }}>
-                          Executed with {approvalsCount} votes
-                        </p>
-                      ) : (
-                        <p style={{ fontWeight: 600 }}>
-                          Votes: {approvalsCount}/{requiredVotes}
-                        </p>
-                      )}
-
-                      <button
-                        style={s.secondaryButton}
-                        onClick={() =>
-                          setExpandedApprovals(
-                            expandedApprovals === proposal.id
-                              ? null
-                              : proposal.id
-                          )
-                        }
-                      >
-                        View Approvals
-                      </button>
-
-                      {expandedApprovals === proposal.id && (
-                        <ul style={s.ownersList}>
-                          {proposal.approvals.map((addr: string) => (
-                            <li key={addr} style={s.ownerItem}>{addr}</li>
-                          ))}
-                        </ul>
-                      )}
-
-                      {!proposal.is_executed && (
-                        <button
-                          style={{
-                            ...s.primaryButton,
-                            marginTop: 8,
-                            opacity: voteDisabled ? 0.5 : 1,
-                            cursor: voteDisabled ? "not-allowed" : "pointer"
-                          }}
-                          disabled={voteDisabled}
-                          onClick={() => handleVote(proposal.id)}
-                        >
-                          Vote
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-
-            <div style={s.modalButtons}>
-              <button
-                style={s.secondaryButton}
-                onClick={() => setShowProposalsModal(false)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-     )}
-
+      <ProposalsModal
+        show={showProposalsModal}
+        walletData={walletData}
+        isAdmin={isAdmin}
+        expandedApprovals={expandedApprovals}
+        setExpandedApprovals={setExpandedApprovals}
+        handleVote={handleVote}
+        formatApt={formatApt}
+        setShow={setShowProposalsModal}
+        MODE_COMBINED={MODE_COMBINED}
+        MODE_MAJORITY={MODE_MAJORITY}
+        styles={s}
+      />
     </div>
 
     

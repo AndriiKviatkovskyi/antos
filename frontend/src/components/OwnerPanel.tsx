@@ -3,18 +3,22 @@ import React from "react";
 type OwnerPanelProps = {
   isOwner: boolean;
   isLastAdmin: boolean;
+  isCharity: boolean;
   onShowFundModal: () => void;
   onShowLimitsModal: () => void;
   onShowLeaveModal: () => void;
+  onShowMonthlyModal: () => void; 
   styles: any;
 };
 
 const OwnerPanel: React.FC<OwnerPanelProps> = ({
   isOwner,
   isLastAdmin,
+  isCharity,
   onShowFundModal,
   onShowLimitsModal,
   onShowLeaveModal,
+  onShowMonthlyModal,
   styles: s,
 }) => {
   return (
@@ -51,6 +55,23 @@ const OwnerPanel: React.FC<OwnerPanelProps> = ({
               <p style={s.errorText}>
                 You cannot leave — you are the last admin.
               </p>
+            )}
+
+            {isCharity && (
+              <>
+                <div style={{ height: 12 }} />
+
+                <button
+                  style={{
+                    ...s.primaryButton,
+                    backgroundColor: "#22c55e",
+                    border: "1px solid #15803d",
+                  }}
+                  onClick={onShowMonthlyModal}
+                >
+                  Monthly Payments
+                </button>
+              </>
             )}
           </>
         ) : (

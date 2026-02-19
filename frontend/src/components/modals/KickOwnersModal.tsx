@@ -19,7 +19,7 @@ export default function KickOwnerModal({
 
   return (
     <div style={styles.modalOverlay}>
-      <div style={styles.modal}>
+      <div style={styles.limitsModal}>
         <h3>Remove Owner</h3>
 
         <p>Are you sure you want to remove:</p>

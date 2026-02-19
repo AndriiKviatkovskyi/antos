@@ -23,6 +23,8 @@ import LeaveWalletModal from "../components/modals/LeaveWalletModal";
 import KickOwnerModal from "../components/modals/KickOwnersModal";
 import ProposeTransferModal from "../components/modals/ProposeTransferModal";
 import ProposalsModal from "../components/modals/ProposalsModal";
+import MonthlyPaymentsModal from "../components/modals/MonthlyPaymentsModal";
+import MemberPaymentsAdminModal from "../components/modals/MemberPaymentsAdminModal";
 
 
 const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
@@ -79,6 +81,9 @@ export function WalletDetailsPage() {
 
   const [showProposalsModal, setShowProposalsModal] = useState(false);
   const [expandedApprovals, setExpandedApprovals] = useState<string | number | null>(null);
+
+  const [showMonthlyModal, setShowMonthlyModal] = useState(false);
+  const [showMemberPaymentsModal, setShowMemberPaymentsModal] = useState(false);
 
   async function fetchData() {
     if (!address) return;
@@ -538,6 +543,52 @@ export function WalletDetailsPage() {
     }
   }
 
+  async function handlePayMonthlyFee() {
+    if (!account || !address) return;
+
+    try {
+      setStatus("Paying monthly fee...");
+
+      const payload: InputEntryFunctionData = {
+        function: `${MULTISIG_MODULE}::pay_monthly_fee`,
+        typeArguments: [],
+        functionArguments: [address],
+      };
+
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+
+      await fetchData();
+      setStatus("Monthly fee paid successfully.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Payment failed.");
+    }
+  }
+
+  async function handleWipeDelinquentMembers() {
+    if (!account || !address) return;
+
+    try {
+      setStatus("Wiping delinquent members...");
+
+      const payload: InputEntryFunctionData = {
+        function: `${MULTISIG_MODULE}::wipe_delinquent_members`,
+        typeArguments: [],
+        functionArguments: [address],
+      };
+
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+
+      await fetchData();
+      setStatus("Delinquent members removed.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Wipe failed.");
+    }
+  }
+
   useEffect(() => {
     if (!walletData) return;
     setProposalError(null);
@@ -606,9 +657,11 @@ export function WalletDetailsPage() {
           <OwnerPanel
             isOwner={isOwner}
             isLastAdmin={isLastAdmin}
+            isCharity={walletData?.is_charity}
             onShowFundModal={() => setShowFundModal(true)}
             onShowLimitsModal={() => setShowLimitsModal(true)}
             onShowLeaveModal={() => setShowLeaveModal(true)}
+            onShowMonthlyModal={() => setShowMonthlyModal(true)}
             styles={s}
           />
 
@@ -632,11 +685,13 @@ export function WalletDetailsPage() {
           {/* ADMIN PANEL */}
           <AdminPanel
             isAdmin={isAdmin}
+            isCharity={walletData?.is_charity}
             styles={s}
             setShowInviteModal={setShowInviteModal}
             openGovernanceModal={openGovernanceModal}
             openListsModal={openListsModal}
             openUpdateLimitsModal={openUpdateLimitsModal}
+            onShowMemberPaymentsModal={() => setShowMemberPaymentsModal(true)}
           />
         </div>
       )}
@@ -777,6 +832,24 @@ export function WalletDetailsPage() {
         MODE_MAJORITY={MODE_MAJORITY}
         styles={s}
       />
-    </div>  
+
+      {/* ================= MONTLY PAYMETNS MODAL ================= */}
+      <MonthlyPaymentsModal
+        show={showMonthlyModal}
+        walletData={walletData}
+        currentUserHex={currentUserHex}
+        handlePayMonthlyFee={handlePayMonthlyFee}
+        setShow={setShowMonthlyModal}
+        styles={s}
+      />
+
+      <MemberPaymentsAdminModal
+        show={showMemberPaymentsModal}
+        walletData={walletData}
+        handleWipe={handleWipeDelinquentMembers}
+        setShow={setShowMemberPaymentsModal}
+        styles={s}
+      />
+    </div>
   );
 }

@@ -5,6 +5,7 @@ interface WalletInfoProps {
   address?: string;
   balance?: number | null;
   currentUserHex?: string;
+  isOwner: boolean;
   isAdmin: boolean;
   formatApt: (amount: number) => string;
   styles: any;
@@ -19,6 +20,7 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
   address,
   balance,
   currentUserHex,
+  isOwner,
   isAdmin,
   formatApt,
   styles: s,
@@ -102,30 +104,32 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
           </ul>
         )}
 
-        <div style={{ marginTop: 16 }}>
-          <button
-            style={{
-              ...s.primaryButton,
-              opacity: walletData.only_admins_can_initiate && !isAdmin ? 0.5 : 1,
-              cursor:
-                walletData.only_admins_can_initiate && !isAdmin
-                  ? "not-allowed"
-                  : "pointer",
-            }}
-            disabled={walletData.only_admins_can_initiate && !isAdmin}
-            onClick={onShowProposeModal}
-          >
-            Initiate Proposal
-          </button>
+        {isOwner && (
+          <div style={{ marginTop: 16 }}>
+            <button
+              style={{
+                ...s.primaryButton,
+                opacity: walletData.only_admins_can_initiate && !isAdmin ? 0.5 : 1,
+                cursor:
+                  walletData.only_admins_can_initiate && !isAdmin
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+              disabled={walletData.only_admins_can_initiate && !isAdmin}
+              onClick={onShowProposeModal}
+            >
+              Initiate Proposal
+            </button>
 
-          <button style={s.secondaryButton} onClick={onShowProposalsModal}>
-            View Proposals
-          </button>
+            <button style={s.secondaryButton} onClick={onShowProposalsModal}>
+              View Proposals
+            </button>
 
-          {walletData.only_admins_can_initiate && !isAdmin && (
-            <p style={s.errorText}>Only admins can initiate proposals.</p>
-          )}
-        </div>
+            {walletData.only_admins_can_initiate && !isAdmin && (
+              <p style={s.errorText}>Only admins can initiate proposals.</p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -597,6 +597,7 @@ export function WalletDetailsPage() {
             address={address || ""}
             balance={balance}
             currentUserHex={currentUserHex || ""}
+            isOwner={isOwner}
             isAdmin={isAdmin}
             formatApt={formatApt}
             styles={s}
@@ -754,9 +755,6 @@ export function WalletDetailsPage() {
         MODE_MAJORITY={MODE_MAJORITY}
         styles={s}
       />
-    </div>
-
-    
+    </div>  
   );
-
 }

@@ -7,6 +7,7 @@ import { MyWalletsPage } from "./pages/MyWalletsPage.js";
 import { CreateWalletPage } from "./pages/CreateWalletPage.js";
 import { WalletDetailsPage } from "./pages/WalletDetailsPage.js";
 import { InvitesPage } from "./pages/InvitesPage.js";
+import { CharityWalletsPage } from "./pages/CharityWalletsPage.js";
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
             <Route path="createwallet" element={<CreateWalletPage />} />
             <Route path="/wallet/:address" element={<WalletDetailsPage />} />
             <Route path="invites" element={<InvitesPage />} />
+            <Route path="charity-wallets" element={<CharityWalletsPage />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Route>
         </Routes>

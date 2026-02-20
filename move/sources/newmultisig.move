@@ -30,6 +30,12 @@ module multisig_addr::newmultisig {
     const ENOT_CHARITY: u64 = 21;
     const EINVITE_DISABLED_FOR_CHARITY: u64 = 22;
     const EINVALID_MODE: u64 = 23;
+    const ENOT_PROPOSER: u64 = 24;
+    const ETHRESHOLD_NOT_MET: u64 = 25;
+    const EVETO_SAFE_MODE: u64 = 26;
+    const EKICK_CHARITY_MODE: u64 = 27;
+    const ERATE_LIMIT: u64 = 28;
+    const ELIMIT_BELOW_ACCUMULATED: u64 = 29;
 
     /// --- Wallet Modes ---
     const MODE_FLEXIBLE: u8 = 0;
@@ -151,6 +157,7 @@ module multisig_addr::newmultisig {
         amount: u64, 
         approvals: vector<address>,
         status: u8,
+        created_at: u64,
         earliest_execution_time: u64,
         expiry_time: u64,
     }
@@ -255,17 +262,17 @@ module multisig_addr::newmultisig {
 
         let daily_limit = LimitTracker { 
             accumulated_amount: 0, 
-            last_reset_timestamp: now, 
+            last_reset_timestamp: 0, 
             max_amount: if (daily_max > 0) option::some(daily_max) else option::none() 
         };
         let weekly_limit = LimitTracker { 
             accumulated_amount: 0, 
-            last_reset_timestamp: now, 
+            last_reset_timestamp: 0, 
             max_amount: if (weekly_max > 0) option::some(weekly_max) else option::none() 
         };
         let monthly_limit = LimitTracker { 
             accumulated_amount: 0, 
-            last_reset_timestamp: now, 
+            last_reset_timestamp: 0, 
             max_amount: if (monthly_max > 0) option::some(monthly_max) else option::none() 
         };
 
@@ -496,6 +503,7 @@ module multisig_addr::newmultisig {
 
     public entry fun remove_owner(admin: &signer, multisig_address: address, owner_to_remove: address) acquires MultisigStore, ModuleEvents {
         let store = borrow_global_mut<MultisigStore>(multisig_address);
+        assert!(store.voting_mode != MODE_CHARITY, EKICK_CHARITY_MODE);
         let admin_addr = signer::address_of(admin);
         assert!(vector::contains(&store.admins, &admin_addr), ENOT_ADMIN);
         assert!(!vector::contains(&store.admins, &owner_to_remove), ENOT_AUTHORIZED);
@@ -537,13 +545,64 @@ module multisig_addr::newmultisig {
 
     /// --- CONFIGURATION ---
 
-    public entry fun set_transaction_limits(admin: &signer, multisig_address: address, daily: u64, weekly: u64, monthly: u64) acquires MultisigStore, ModuleEvents {
+    public entry fun set_transaction_limits(
+        admin: &signer,
+        multisig_address: address,
+        daily: u64,
+        weekly: u64,
+        monthly: u64
+    ) acquires MultisigStore, ModuleEvents {
+
         let store = borrow_global_mut<MultisigStore>(multisig_address);
         let admin_addr = signer::address_of(admin);
         assert!(vector::contains(&store.admins, &admin_addr), ENOT_ADMIN);
-        store.daily_limit.max_amount = if (daily > 0) option::some(daily) else option::none();
-        store.weekly_limit.max_amount = if (weekly > 0) option::some(weekly) else option::none();
-        store.monthly_limit.max_amount = if (monthly > 0) option::some(monthly) else option::none();
+
+        let now = timestamp::now_seconds();
+
+        if (daily > 0) {
+            let daily_period_active = now < store.daily_limit.last_reset_timestamp + DAY_SECONDS;
+
+            if (daily_period_active) {
+                assert!(
+                    daily >= store.daily_limit.accumulated_amount,
+                    ELIMIT_BELOW_ACCUMULATED
+                );
+            };
+
+            store.daily_limit.max_amount = option::some(daily);
+        } else {
+            store.daily_limit.max_amount = option::none();
+        };
+
+        if (weekly > 0) {
+            let weekly_period_active = now < store.weekly_limit.last_reset_timestamp + WEEK_SECONDS;
+
+            if (weekly_period_active) {
+                assert!(
+                    weekly >= store.weekly_limit.accumulated_amount,
+                    ELIMIT_BELOW_ACCUMULATED
+                );
+            };
+
+            store.weekly_limit.max_amount = option::some(weekly);
+        } else {
+            store.weekly_limit.max_amount = option::none();
+        };
+
+        if (monthly > 0) {
+            let monthly_period_active = now < store.monthly_limit.last_reset_timestamp + MONTH_SECONDS;
+
+            if (monthly_period_active) {
+                assert!(
+                    monthly >= store.monthly_limit.accumulated_amount,
+                    ELIMIT_BELOW_ACCUMULATED
+                );
+            };
+
+            store.monthly_limit.max_amount = option::some(monthly);
+        } else {
+            store.monthly_limit.max_amount = option::none();
+        };
 
         let events = borrow_global_mut<ModuleEvents>(@multisig_addr);
         event::emit_event(&mut events.governance_events, GovernanceEvent {
@@ -580,6 +639,23 @@ module multisig_addr::newmultisig {
         else { find_and_remove(&mut store.membership_blacklist, addr); };
     }
 
+    public entry fun set_membership_blacklist(admin: &signer, multisig_address: address, new_blacklist: vector<address>) acquires MultisigStore {
+        let store = borrow_global_mut<MultisigStore>(multisig_address);
+        let admin_addr = signer::address_of(admin);
+        assert!(vector::contains(&store.admins, &admin_addr), ENOT_ADMIN);
+
+        let updated_blacklist = vector::empty<address>();
+        let i = 0;
+        let len = vector::length(&new_blacklist);
+        while (i < len) {
+            let addr = *vector::borrow(&new_blacklist, i);
+            vector::push_back(&mut updated_blacklist, addr);
+            i = i + 1;
+        };
+
+        *&mut store.membership_blacklist = updated_blacklist;
+    }
+
     public entry fun toggle_recipient_filter_mode(admin: &signer, multisig_address: address, is_whitelist: bool) acquires MultisigStore, ModuleEvents {
         let store = borrow_global_mut<MultisigStore>(multisig_address);
         let admin_addr = signer::address_of(admin);
@@ -603,6 +679,33 @@ module multisig_addr::newmultisig {
         else { find_and_remove(list, addr); };
     }
 
+    public entry fun set_recipient_list(
+        admin: &signer,
+        multisig_address: address,
+        new_list: vector<address>,
+        use_whitelist: bool
+    ) acquires MultisigStore {
+        let store = borrow_global_mut<MultisigStore>(multisig_address);
+        let admin_addr = signer::address_of(admin);
+        assert!(vector::contains(&store.admins, &admin_addr), ENOT_ADMIN);
+
+        let updated_list = vector::empty<address>();
+
+        let i = 0;
+        let len = vector::length(&new_list);
+        while (i < len) {
+            let addr = *vector::borrow(&new_list, i);
+            vector::push_back(&mut updated_list, addr);
+            i = i + 1;
+        };
+
+        if (use_whitelist) {
+            *&mut store.recipient_whitelist = updated_list;
+        } else {
+            *&mut store.recipient_blacklist = updated_list;
+        };
+    }
+
     /// --- TRANSACTION LOGIC ---
 
     public entry fun propose_transfer(creator: &signer, multisig_address: address, recipient: address, amount: u64, timelock_seconds: u64, execution_window: u64) acquires MultisigStore, ModuleEvents {
@@ -613,6 +716,25 @@ module multisig_addr::newmultisig {
         if (store.recipient_filter_is_whitelist) { assert!(vector::contains(&store.recipient_whitelist, &recipient), ERECIPIENT_NOT_ALLOWED); }
         else { assert!(!vector::contains(&store.recipient_blacklist, &recipient), ERECIPIENT_NOT_ALLOWED); };
         let now = timestamp::now_seconds();
+        let count = 0;
+        let i = vector::length(&store.proposals);
+
+        while (i > 0) {
+            i = i - 1;
+            let p = vector::borrow(&store.proposals, i);
+
+            if (p.created_at + 900 < now) {
+                break;
+            };
+
+            if (p.creator == creator_addr) {
+                count = count + 1;
+                if (count >= 10) {
+                    abort ERATE_LIMIT;
+                };
+            };
+        };
+
         let proposal_id = store.next_proposal_id;
         let new_proposal = Proposal { 
             id: proposal_id, 
@@ -621,6 +743,7 @@ module multisig_addr::newmultisig {
             amount, 
             approvals: vector::empty<address>(), 
             status: STATUS_PENDING,
+            created_at: now,
             earliest_execution_time: now + timelock_seconds, 
             expiry_time: if (execution_window > 0) { now + timelock_seconds + execution_window } else { 0 }, 
         };
@@ -694,16 +817,78 @@ module multisig_addr::newmultisig {
         abort EPROPOSAL_NOT_FOUND
     }
 
-    public entry fun cancel_proposal(caller: &signer, multisig_address: address, proposal_id: u64) acquires MultisigStore, ModuleEvents {
-        let caller_addr = signer::address_of(caller);
+
+    public entry fun execute(initiator: &signer, multisig_address: address, proposal_id: u64) acquires MultisigStore, ModuleEvents {
+        let initiator_addr = signer::address_of(initiator);
         let store = borrow_global_mut<MultisigStore>(multisig_address);
+
         let i = 0;
         let len = vector::length(&store.proposals);
+        while (i < len) {
+            let proposal = vector::borrow_mut(&mut store.proposals, i);
 
+            if (proposal.id == proposal_id) {
+                assert!(proposal.creator == initiator_addr, ENOT_PROPOSER);
+                
+                let now = timestamp::now_seconds();
+
+                assert!(proposal.status == STATUS_PENDING, EPROPOSAL_NOT_PENDING);
+
+                if (proposal.expiry_time > 0) {
+                    assert!(now <= proposal.expiry_time, EPROPOSAL_EXPIRED);
+                };
+
+                let total_voters = vector::length(&store.owners);
+                let active_mode = store.voting_mode;
+                if (active_mode == MODE_COMBINED) {
+                    if (proposal.amount < store.tier_two_threshold) { active_mode = MODE_MAJORITY; }
+                    else if (proposal.amount < store.tier_three_threshold) { active_mode = MODE_TWO_THIRDS; }
+                    else { active_mode = MODE_UNANIMOUS; };
+                };
+                let num_approvals = vector::length(&proposal.approvals);
+                let threshold_met = false;
+                if (active_mode == MODE_MAJORITY) { threshold_met = num_approvals >= (total_voters / 2 + 1); }
+                else if (active_mode == MODE_TWO_THIRDS) { threshold_met = (3 * num_approvals) >= (2 * total_voters); }
+                else if (active_mode == MODE_UNANIMOUS) { threshold_met = num_approvals == total_voters; };
+
+                assert!(threshold_met, ETHRESHOLD_NOT_MET);
+
+                assert!(now >= proposal.earliest_execution_time, ETIMELOCK_ACTIVE);
+
+                check_and_update_limit(&mut store.daily_limit, proposal.amount, DAY_SECONDS, now);
+                check_and_update_limit(&mut store.weekly_limit, proposal.amount, WEEK_SECONDS, now);
+                check_and_update_limit(&mut store.monthly_limit, proposal.amount, MONTH_SECONDS, now);
+
+                let treasury_signer = account::create_signer_with_capability(&store.signer_cap);
+                coin::transfer<AptosCoin>(&treasury_signer, proposal.recipient, proposal.amount);
+                proposal.status = STATUS_EXECUTED;
+
+                let events = borrow_global_mut<ModuleEvents>(@multisig_addr);
+                event::emit_event(&mut events.proposal_events, ProposalEvent {
+                    wallet_address: multisig_address,
+                    proposal_id,
+                    action: string::utf8(b"EXECUTED"),
+                    actor: initiator_addr
+                });
+
+                return;
+            };
+
+            i = i + 1;
+        };
+        abort EPROPOSAL_NOT_FOUND;
+    }
+
+    public entry fun cancel_proposal(creator: &signer, multisig_address: address, proposal_id: u64) acquires MultisigStore, ModuleEvents {
+        let store = borrow_global_mut<MultisigStore>(multisig_address);
+        let creator_addr = signer::address_of(creator);
+
+        let i = 0;
+        let len = vector::length(&store.proposals);
         while (i < len) {
             let proposal = vector::borrow_mut(&mut store.proposals, i);
             if (proposal.id == proposal_id) {
-                assert!(proposal.creator == caller_addr, ENOT_AUTHORIZED);
+                assert!(proposal.creator == creator_addr, ENOT_AUTHORIZED);
                 assert!(proposal.status == STATUS_PENDING, EPROPOSAL_NOT_PENDING);
 
                 proposal.status = STATUS_CANCELLED;
@@ -713,8 +898,9 @@ module multisig_addr::newmultisig {
                     wallet_address: multisig_address,
                     proposal_id,
                     action: string::utf8(b"CANCELLED"),
-                    actor: caller_addr
+                    actor: creator_addr
                 });
+
                 return;
             };
             i = i + 1;
@@ -724,6 +910,7 @@ module multisig_addr::newmultisig {
 
     public entry fun veto(admin: &signer, multisig_address: address, proposal_id: u64) acquires MultisigStore, ModuleEvents {
         let store = borrow_global_mut<MultisigStore>(multisig_address);
+        assert!(store.voting_mode != MODE_SAFE, EVETO_SAFE_MODE);
         let admin_addr = signer::address_of(admin);
         assert!(store.admins_can_veto, EVETO_DISABLED);
         assert!(vector::contains(&store.admins, &admin_addr), ENOT_ADMIN);

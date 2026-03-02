@@ -36,6 +36,7 @@ module multisig_addr::newmultisig {
     const EKICK_CHARITY_MODE: u64 = 27;
     const ERATE_LIMIT: u64 = 28;
     const ELIMIT_BELOW_ACCUMULATED: u64 = 29;
+    const EALREADY_ADMIN: u64 = 30;
 
     /// --- Wallet Modes ---
     const MODE_FLEXIBLE: u8 = 0;
@@ -501,6 +502,36 @@ module multisig_addr::newmultisig {
         }
     }
 
+    public entry fun promote_to_admin(
+        admin: &signer,
+        multisig_address: address,
+        target: address
+    ) acquires MultisigStore, ModuleEvents {
+
+        let store = borrow_global_mut<MultisigStore>(multisig_address);
+        let admin_addr = signer::address_of(admin);
+
+        assert!(vector::contains(&store.admins, &admin_addr), ENOT_ADMIN);
+        assert!(store.wallet_mode != MODE_SAFE, EINVALID_MODE);
+        assert!(vector::contains(&store.owners, &target), ENOT_OWNER);
+        assert!(!vector::contains(&store.admins, &target), EALREADY_ADMIN);
+
+        if (store.wallet_mode == MODE_CHARITY) {
+            assert!(vector::length(&store.admins) < 3, ENOT_AUTHORIZED);
+        };
+
+        vector::push_back(&mut store.admins, target);
+
+        let events = borrow_global_mut<ModuleEvents>(@multisig_addr);
+        event::emit_event(&mut events.membership_events, MembershipEvent {
+            wallet_address: multisig_address,
+            wallet_name: store.name,
+            action: string::utf8(b"PROMOTED_TO_ADMIN"),
+            member: target,
+            actor: admin_addr
+        });
+    }
+
     public entry fun remove_owner(admin: &signer, multisig_address: address, owner_to_remove: address) acquires MultisigStore, ModuleEvents {
         let store = borrow_global_mut<MultisigStore>(multisig_address);
         assert!(store.voting_mode != MODE_CHARITY, EKICK_CHARITY_MODE);
@@ -759,6 +790,23 @@ module multisig_addr::newmultisig {
         });
     }
 
+    fun cleanup_ghost_approvals(
+        owners: &vector<address>,
+        proposal: &mut Proposal
+    ) {
+        let i = 0;
+        while (i < vector::length(&proposal.approvals)) {
+            let voter = *vector::borrow(&proposal.approvals, i);
+
+            if (!vector::contains(owners, &voter)) {
+                vector::remove(&mut proposal.approvals, i);
+            } else {
+                i = i + 1;
+            };
+        };
+    }
+
+
     public entry fun approve(approver: &signer, multisig_address: address, proposal_id: u64) acquires MultisigStore, ModuleEvents {
         let approver_addr = signer::address_of(approver);
         let store = borrow_global_mut<MultisigStore>(multisig_address);
@@ -772,6 +820,7 @@ module multisig_addr::newmultisig {
                 assert!(proposal.status == STATUS_PENDING, EPROPOSAL_NOT_PENDING);
                 assert!(!vector::contains(&proposal.approvals, &approver_addr), EALREADY_APPROVED);
                 if (proposal.expiry_time > 0) { assert!(now <= proposal.expiry_time, EPROPOSAL_EXPIRED); };
+                cleanup_ghost_approvals(&store.owners, proposal);
                 vector::push_back(&mut proposal.approvals, approver_addr);
                 
                 let events = borrow_global_mut<ModuleEvents>(@multisig_addr);
@@ -837,6 +886,8 @@ module multisig_addr::newmultisig {
                 if (proposal.expiry_time > 0) {
                     assert!(now <= proposal.expiry_time, EPROPOSAL_EXPIRED);
                 };
+
+                cleanup_ghost_approvals(&store.owners, proposal);
 
                 let total_voters = vector::length(&store.owners);
                 let active_mode = store.voting_mode;
@@ -939,5 +990,86 @@ module multisig_addr::newmultisig {
     #[view]
     public fun get_balance(multisig_address: address): u64 {
         coin::balance<AptosCoin>(multisig_address)
+    }
+
+    #[test_only]
+    use aptos_framework::account::create_account_for_test;
+
+    #[test(admin = @multisig_addr, user = @0x456)]
+    public entry fun test_multisig_proposal_flow(
+        admin: &signer,
+        user: &signer
+    ) acquires MultisigStore, ModuleEvents {
+
+        let admin_addr = signer::address_of(admin);
+        let user_addr = signer::address_of(user);
+
+        // --- Setup accounts ---
+        create_account_for_test(admin_addr);
+        create_account_for_test(user_addr);
+        create_account_for_test(@0x1);
+
+        aptos_framework::timestamp::set_time_has_started_for_testing(
+            &create_account_for_test(@0x1)
+        );
+
+        // --- Init global events ---
+        init_module(admin);
+
+        // --- Initialize wallet (FLEXIBLE mode) ---
+        let seed = b"test_wallet";
+        initialize(admin, copy seed, 5, MODE_FLEXIBLE, 0, 0);
+
+        let multisig_addr = account::create_resource_address(&admin_addr, seed);
+
+        // --- Invite second owner ---
+        invite_owner(admin, multisig_addr, user_addr, false);
+        respond_to_invitation(user, multisig_addr, true);
+
+        // --- Mint coins to admin and fund wallet ---
+        let (burn_cap, mint_cap) =
+            aptos_framework::aptos_coin::initialize_for_test(&create_account_for_test(@0x1));
+
+        coin::register<AptosCoin>(admin);
+        coin::register<AptosCoin>(user);
+
+        let coins = coin::mint<AptosCoin>(1000, &mint_cap);
+        coin::deposit(admin_addr, coins);
+
+        fund_voluntarily(admin, multisig_addr, 500);
+
+        // --- Create proposal (majority = 2/2 owners) ---
+        propose_transfer(
+            admin,
+            multisig_addr,
+            user_addr,
+            100,
+            0,  // no timelock
+            0   // no expiry
+        );
+
+        // proposal_id should be 0
+        let proposal_id = 0;
+
+        // --- Approve by admin ---
+        approve(admin, multisig_addr, proposal_id);
+
+        // --- Approve by user (should EXECUTE here automatically) ---
+        approve(user, multisig_addr, proposal_id);
+
+        // --- Check proposal status ---
+        let store = borrow_global<MultisigStore>(multisig_addr);
+
+        let proposal_ref = vector::borrow(&store.proposals, 0);
+
+        assert!(proposal_ref.status == STATUS_EXECUTED, 1001);
+
+        // --- Check recipient received funds ---
+        let balance = coin::balance<AptosCoin>(user_addr);
+        assert!(balance >= 100, 1002);
+
+        // Cleanup caps
+        aptos_framework::coin::destroy_burn_cap(burn_cap);
+        aptos_framework::coin::destroy_mint_cap(mint_cap);
     }
 }

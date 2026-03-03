@@ -32,7 +32,7 @@ module multisig_addr::newmultisig {
     const EINVALID_MODE: u64 = 23;
     const ENOT_PROPOSER: u64 = 24;
     const ETHRESHOLD_NOT_MET: u64 = 25;
-    const EVETO_SAFE_MODE: u64 = 26;
+    const ESAFE_MODE_FORBIDDEN: u64 = 26;
     const EKICK_CHARITY_MODE: u64 = 27;
     const ERATE_LIMIT: u64 = 28;
     const ELIMIT_BELOW_ACCUMULATED: u64 = 29;
@@ -149,6 +149,8 @@ module multisig_addr::newmultisig {
         entry_fee: u64,
         monthly_fee: u64,
         member_payment_history: vector<MemberData>,
+        kick_proposals: vector<KickProposal>,
+        next_kick_proposal_id: u64
     }
 
     struct Proposal has store, copy, drop {
@@ -161,6 +163,15 @@ module multisig_addr::newmultisig {
         created_at: u64,
         earliest_execution_time: u64,
         expiry_time: u64,
+    }
+
+    struct KickProposal has store, copy, drop {
+        id: u64,
+        initiator: address,
+        target: address,
+        approvals: vector<address>,
+        created_at: u64,
+        active: bool,
     }
 
     fun init_module(admin: &signer) {
@@ -213,6 +224,8 @@ module multisig_addr::newmultisig {
             entry_fee,
             monthly_fee,
             member_payment_history: vector[MemberData { addr: admin_addr, last_payment_timestamp: timestamp::now_seconds() }],
+            kick_proposals: vector::empty<KickProposal>(),
+            next_kick_proposal_id: 0,
         });
 
         let events = borrow_global_mut<ModuleEvents>(@multisig_addr);
@@ -302,6 +315,8 @@ module multisig_addr::newmultisig {
             entry_fee,
             monthly_fee,
             member_payment_history: vector[MemberData { addr: admin_addr, last_payment_timestamp: now }],
+            kick_proposals: vector::empty<KickProposal>(),
+            next_kick_proposal_id: 0
         });
 
         let events = borrow_global_mut<ModuleEvents>(@multisig_addr);
@@ -334,6 +349,17 @@ module multisig_addr::newmultisig {
     fun find_and_remove(v: &mut vector<address>, addr: address) {
         let (found, index) = vector::index_of(v, &addr);
         if (found) { vector::remove(v, index); };
+    }
+
+    fun cancel_pending_governance_proposals(store: &mut MultisigStore) {
+        let i = 0;
+        while (i < vector::length(&store.proposals)) {
+            let proposal = vector::borrow_mut(&mut store.proposals, i);
+            if (proposal.status == STATUS_PENDING) {
+                proposal.status = STATUS_CANCELLED_GOV;
+            };
+            i = i + 1;
+        };
     }
 
     fun check_and_update_limit(tracker: &mut LimitTracker, amount: u64, period: u64, now: u64) {
@@ -473,6 +499,10 @@ module multisig_addr::newmultisig {
             if (!vector::contains(&store.owners, &caller_addr)) vector::push_back(&mut store.owners, caller_addr);
             if (make_admin && !vector::contains(&store.admins, &caller_addr)) vector::push_back(&mut store.admins, caller_addr);
             
+            if (store.voting_mode == MODE_SAFE) {
+                cancel_pending_governance_proposals(store);
+            };
+
             // Emit Invite Accepted
             event::emit_event(&mut events.invite_events, InviteEvent {
                 wallet_address: multisig_address,
@@ -515,6 +545,7 @@ module multisig_addr::newmultisig {
         assert!(store.wallet_mode != MODE_SAFE, EINVALID_MODE);
         assert!(vector::contains(&store.owners, &target), ENOT_OWNER);
         assert!(!vector::contains(&store.admins, &target), EALREADY_ADMIN);
+        assert!(store.voting_mode != MODE_SAFE, ESAFE_MODE_FORBIDDEN);
 
         if (store.wallet_mode == MODE_CHARITY) {
             assert!(vector::length(&store.admins) < 3, ENOT_AUTHORIZED);
@@ -534,7 +565,7 @@ module multisig_addr::newmultisig {
 
     public entry fun remove_owner(admin: &signer, multisig_address: address, owner_to_remove: address) acquires MultisigStore, ModuleEvents {
         let store = borrow_global_mut<MultisigStore>(multisig_address);
-        assert!(store.voting_mode != MODE_CHARITY, EKICK_CHARITY_MODE);
+        assert!(store.wallet_mode == MODE_FLEXIBLE, EINVALID_MODE);
         let admin_addr = signer::address_of(admin);
         assert!(vector::contains(&store.admins, &admin_addr), ENOT_ADMIN);
         assert!(!vector::contains(&store.admins, &owner_to_remove), ENOT_AUTHORIZED);
@@ -555,6 +586,103 @@ module multisig_addr::newmultisig {
         });
     }
 
+    public entry fun propose_kick(
+        initiator: &signer,
+        multisig_address: address,
+        target: address
+    ) acquires MultisigStore {
+
+        let store = borrow_global_mut<MultisigStore>(multisig_address);
+        let initiator_addr = signer::address_of(initiator);
+
+        assert!(store.wallet_mode == MODE_SAFE, EINVALID_MODE);
+        assert!(vector::contains(&store.owners, &initiator_addr), ENOT_OWNER);
+        assert!(vector::contains(&store.owners, &target), ENOT_OWNER);
+        assert!(initiator_addr != target, ENOT_AUTHORIZED);
+
+        let proposal_id = store.next_kick_proposal_id;
+
+        let proposal = KickProposal {
+            id: proposal_id,
+            initiator: initiator_addr,
+            target,
+            approvals: vector::empty<address>(),
+            created_at: timestamp::now_seconds(),
+            active: true,
+        };
+
+        vector::push_back(&mut store.kick_proposals, proposal);
+        store.next_kick_proposal_id = proposal_id + 1;
+    }
+
+    public entry fun vote_kick(
+        voter: &signer,
+        multisig_address: address,
+        proposal_id: u64
+    ) acquires MultisigStore, ModuleEvents {
+
+        let store = borrow_global_mut<MultisigStore>(multisig_address);
+        let voter_addr = signer::address_of(voter);
+
+        assert!(store.wallet_mode == MODE_SAFE, EINVALID_MODE);
+        assert!(vector::contains(&store.owners, &voter_addr), ENOT_OWNER);
+
+        let i = 0;
+        let len = vector::length(&store.kick_proposals);
+
+        while (i < len) {
+            let proposal = vector::borrow_mut(&mut store.kick_proposals, i);
+
+            if (proposal.id == proposal_id) {
+
+                assert!(proposal.active, EPROPOSAL_NOT_PENDING);
+                assert!(!vector::contains(&proposal.approvals, &voter_addr), EALREADY_APPROVED);
+
+                vector::push_back(&mut proposal.approvals, voter_addr);
+
+                let total_owners = vector::length(&store.owners);
+                let approvals = vector::length(&proposal.approvals);
+
+                let threshold_met = (3 * approvals) >= (2 * total_owners);
+
+                if (threshold_met) {
+
+                    let target = proposal.target;
+
+                    find_and_remove(&mut store.owners, target);
+                    find_and_remove(&mut store.admins, target);
+
+                    let j = 0;
+                    while (j < vector::length(&store.member_payment_history)) {
+                        if (vector::borrow(&store.member_payment_history, j).addr == target) {
+                            vector::remove(&mut store.member_payment_history, j);
+                            break;
+                        };
+                        j = j + 1;
+                    };
+
+                    proposal.active = false;
+                    cancel_pending_governance_proposals(store);
+
+                    let events = borrow_global_mut<ModuleEvents>(@multisig_addr);
+                    event::emit_event(&mut events.membership_events, MembershipEvent {
+                        wallet_address: multisig_address,
+                        wallet_name: store.name,
+                        action: string::utf8(b"REMOVED"),
+                        member: target,
+                        actor: voter_addr
+                    });
+                };
+
+                return;
+            };
+
+            i = i + 1;
+        };
+
+        abort EPROPOSAL_NOT_FOUND;
+    }
+
     public entry fun self_remove(caller: &signer, multisig_address: address) acquires MultisigStore, ModuleEvents {
         let store = borrow_global_mut<MultisigStore>(multisig_address);
         let caller_addr = signer::address_of(caller);
@@ -563,6 +691,10 @@ module multisig_addr::newmultisig {
         assert!(is_admin || is_owner, ENOT_OWNER);
         if (is_admin) { assert!(vector::length(&store.admins) > 1, ECANNOT_REMOVE_LAST_ADMIN); find_and_remove(&mut store.admins, caller_addr); };
         find_and_remove(&mut store.owners, caller_addr);
+
+        if (store.voting_mode == MODE_SAFE) {
+            cancel_pending_governance_proposals(store);
+        };
 
         let events = borrow_global_mut<ModuleEvents>(@multisig_addr);
         event::emit_event(&mut events.membership_events, MembershipEvent {
@@ -635,6 +767,10 @@ module multisig_addr::newmultisig {
             store.monthly_limit.max_amount = option::none();
         };
 
+        if (store.voting_mode == MODE_SAFE) {
+            cancel_pending_governance_proposals(store);
+        };
+
         let events = borrow_global_mut<ModuleEvents>(@multisig_addr);
         event::emit_event(&mut events.governance_events, GovernanceEvent {
             wallet_address: multisig_address,
@@ -654,6 +790,10 @@ module multisig_addr::newmultisig {
         store.tier_two_threshold = tier_two;
         store.tier_three_threshold = tier_three;
 
+        if (store.voting_mode == MODE_SAFE) {
+            cancel_pending_governance_proposals(store);
+        };
+
         let events = borrow_global_mut<ModuleEvents>(@multisig_addr);
         event::emit_event(&mut events.governance_events, GovernanceEvent {
             wallet_address: multisig_address,
@@ -668,6 +808,9 @@ module multisig_addr::newmultisig {
         assert!(vector::contains(&store.admins, &admin_addr), ENOT_ADMIN);
         if (add) { if (!vector::contains(&store.membership_blacklist, &addr)) vector::push_back(&mut store.membership_blacklist, addr); }
         else { find_and_remove(&mut store.membership_blacklist, addr); };
+        if (store.voting_mode == MODE_SAFE) {
+            cancel_pending_governance_proposals(store);
+        };
     }
 
     public entry fun set_membership_blacklist(admin: &signer, multisig_address: address, new_blacklist: vector<address>) acquires MultisigStore {
@@ -685,6 +828,10 @@ module multisig_addr::newmultisig {
         };
 
         *&mut store.membership_blacklist = updated_blacklist;
+
+        if (store.voting_mode == MODE_SAFE) {
+            cancel_pending_governance_proposals(store);
+        };
     }
 
     public entry fun toggle_recipient_filter_mode(admin: &signer, multisig_address: address, is_whitelist: bool) acquires MultisigStore, ModuleEvents {
@@ -692,6 +839,10 @@ module multisig_addr::newmultisig {
         let admin_addr = signer::address_of(admin);
         assert!(vector::contains(&store.admins, &admin_addr), ENOT_ADMIN);
         store.recipient_filter_is_whitelist = is_whitelist;
+
+        if (store.voting_mode == MODE_SAFE) {
+            cancel_pending_governance_proposals(store);
+        };
 
         let events = borrow_global_mut<ModuleEvents>(@multisig_addr);
         event::emit_event(&mut events.governance_events, GovernanceEvent {
@@ -708,6 +859,9 @@ module multisig_addr::newmultisig {
         let list = if (use_whitelist) { &mut store.recipient_whitelist } else { &mut store.recipient_blacklist };
         if (add) { if (!vector::contains(list, &addr)) vector::push_back(list, addr); }
         else { find_and_remove(list, addr); };
+        if (store.voting_mode == MODE_SAFE) {
+            cancel_pending_governance_proposals(store);
+        };
     }
 
     public entry fun set_recipient_list(
@@ -734,6 +888,10 @@ module multisig_addr::newmultisig {
             *&mut store.recipient_whitelist = updated_list;
         } else {
             *&mut store.recipient_blacklist = updated_list;
+        };
+
+        if (store.voting_mode == MODE_SAFE) {
+            cancel_pending_governance_proposals(store);
         };
     }
 
@@ -961,7 +1119,7 @@ module multisig_addr::newmultisig {
 
     public entry fun veto(admin: &signer, multisig_address: address, proposal_id: u64) acquires MultisigStore, ModuleEvents {
         let store = borrow_global_mut<MultisigStore>(multisig_address);
-        assert!(store.voting_mode != MODE_SAFE, EVETO_SAFE_MODE);
+        assert!(store.voting_mode != MODE_SAFE, ESAFE_MODE_FORBIDDEN);
         let admin_addr = signer::address_of(admin);
         assert!(store.admins_can_veto, EVETO_DISABLED);
         assert!(vector::contains(&store.admins, &admin_addr), ENOT_ADMIN);

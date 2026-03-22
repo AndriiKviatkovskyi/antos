@@ -221,6 +221,52 @@ export function WalletDetailsPage() {
     setNewListAddress("");
   }
 
+  async function handleSetMembershipBlacklist(newList: string[]) {
+    if (!account || !address) return;
+
+    try {
+      setStatus("Updating membership blacklist...");
+
+      const payload: InputEntryFunctionData = {
+        function: `${MULTISIG_MODULE}::set_membership_blacklist`,
+        typeArguments: [],
+        functionArguments: [address, newList],
+      };
+
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+
+      await fetchData();
+      setStatus("Membership blacklist updated.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Failed to update membership blacklist.");
+    }
+  }
+
+  async function handleSetRecipientList(newList: string[], useWhitelistMode: boolean) {
+    if (!account || !address) return;
+
+    try {
+      setStatus("Updating recipient list...");
+
+      const payload: InputEntryFunctionData = {
+        function: `${MULTISIG_MODULE}::set_recipient_list`,
+        typeArguments: [],
+        functionArguments: [address, newList, useWhitelistMode],
+      };
+
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+
+      await fetchData();
+      setStatus("Recipient list updated.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Failed to update recipient list.");
+    }
+  }
+
   async function handleRemoveFromList(listName: "membership"|"recipient", addr: string) {
     if (!account || !address) return;
     let payload: InputEntryFunctionData;
@@ -732,6 +778,8 @@ export function WalletDetailsPage() {
         show={showListsModal}
         useWhitelist={useWhitelist}
         membershipBlacklist={membershipBlacklist}
+        handleSetMembershipBlacklist={handleSetMembershipBlacklist}
+        handleSetRecipientList={handleSetRecipientList}
         recipientWhitelist={recipientWhitelist}
         recipientBlacklist={recipientBlacklist}
         newListAddress={newListAddress}

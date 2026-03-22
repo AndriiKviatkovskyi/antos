@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 interface ListsModalProps {
   show: boolean;
 
@@ -18,9 +20,12 @@ interface ListsModalProps {
     address: string
   ) => void;
 
+  handleSetMembershipBlacklist: (list: string[]) => void;
+  handleSetRecipientList: (list: string[], useWhitelist: boolean) => void;
+
   fetchData: () => Promise<void>;
 
-  styles: any; // replace with proper type if needed
+  styles: any;
 }
 
 export default function ListsModal({
@@ -35,21 +40,35 @@ export default function ListsModal({
   handleToggleRecipientMode,
   handleAddToList,
   handleRemoveFromList,
+  handleSetMembershipBlacklist,
+  handleSetRecipientList,
   fetchData,
   styles,
 }: ListsModalProps) {
+  const [bulkMembershipInput, setBulkMembershipInput] = useState("");
+  const [bulkRecipientInput, setBulkRecipientInput] = useState("");
+
   if (!show) return null;
 
   const recipientList = useWhitelist
     ? recipientWhitelist
     : recipientBlacklist;
 
+  const parseAddresses = (input: string): string[] => {
+    return input
+      .split(/[\n, ]+/)
+      .map((a) => a.trim())
+      .filter((a) => a.length > 0);
+  };
+
   return (
     <div style={styles.modalOverlay}>
       <div style={styles.listsModal}>
         <h3>Lists Management</h3>
 
-        <div style={{ marginBottom: 12 }}>
+        {/* ================= Recipient Mode ================= */}
+
+        <div style={{ marginBottom: 16 }}>
           <label>
             <input
               type="checkbox"
@@ -80,6 +99,7 @@ export default function ListsModal({
           ))}
         </ul>
 
+        {/* Single add */}
         <input
           style={styles.input}
           placeholder="0x..."
@@ -87,25 +107,36 @@ export default function ListsModal({
           onChange={(e) => setNewListAddress(e.target.value)}
         />
 
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <button
-            style={styles.primaryButton}
-            onClick={() => handleAddToList("membership")}
-          >
-            Add to Membership Blacklist
-          </button>
+        <button
+          style={styles.primaryButton}
+          onClick={() => handleAddToList("membership")}
+        >
+          Add to Membership Blacklist
+        </button>
 
-          <button
-            style={styles.primaryButton}
-            onClick={() => handleAddToList("recipient")}
-          >
-            Add to Recipient List
-          </button>
-        </div>
+        {/* Bulk */}
+        <h5 style={{ marginTop: 16 }}>Bulk Replace</h5>
+
+        <textarea
+          style={styles.input}
+          placeholder="0x1...\n0x2...\n0x3..."
+          value={bulkMembershipInput}
+          onChange={(e) => setBulkMembershipInput(e.target.value)}
+        />
+
+        <button
+          style={styles.primaryButton}
+          onClick={() => {
+            const parsed = parseAddresses(bulkMembershipInput);
+            handleSetMembershipBlacklist(parsed);
+          }}
+        >
+          Replace Entire Membership Blacklist
+        </button>
 
         {/* ================= Recipient List ================= */}
 
-        <h4>
+        <h4 style={{ marginTop: 24 }}>
           Recipient List ({useWhitelist ? "Whitelist" : "Blacklist"})
         </h4>
 
@@ -125,6 +156,40 @@ export default function ListsModal({
           ))}
         </ul>
 
+        {/* Single add */}
+        <button
+          style={styles.primaryButton}
+          onClick={() => handleAddToList("recipient")}
+        >
+          Add to Recipient List
+        </button>
+
+        {/* Bulk */}
+        <h5 style={{ marginTop: 16 }}>Bulk Replace</h5>
+
+        <textarea
+          style={styles.input}
+          placeholder="0x1...\n0x2...\n0x3..."
+          value={bulkRecipientInput}
+          onChange={(e) => setBulkRecipientInput(e.target.value)}
+        />
+
+        <button
+          style={styles.primaryButton}
+          onClick={() => {
+            const parsed = parseAddresses(bulkRecipientInput);
+            handleSetRecipientList(parsed, useWhitelist);
+          }}
+        >
+          Replace Entire Recipient List
+        </button>
+
+        {/* Warning */}
+        <p style={{ color: "orange", fontSize: 12, marginTop: 12 }}>
+          Warning: Replacing lists may cancel pending proposals in Safe mode.
+        </p>
+
+        {/* Close */}
         <div style={styles.modalButtons}>
           <button
             style={styles.secondaryButton}

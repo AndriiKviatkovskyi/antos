@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 
 interface CharityWallet {
   walletAddress: string;
+  walletName: string;
   admin: string;
   timestamp: string;
 }
@@ -12,6 +13,7 @@ interface CharityWallet {
 export function CharityWalletsPage() {
   const [charityWallets, setCharityWallets] = useState<CharityWallet[]>([]);
   const [status, setStatus] = useState("Loading...");
+  const [expandedWallets, setExpandedWallets] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -34,6 +36,21 @@ export function CharityWalletsPage() {
     fetchCharityWallets();
   }, []);
 
+  const toggleExpand = (address: string) => {
+    setExpandedWallets(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(address)) newSet.delete(address);
+      else newSet.add(address);
+      return newSet;
+    });
+  };
+
+  const renderWalletLabel = (wallet: CharityWallet) => {
+    const isExpanded = expandedWallets.has(wallet.walletAddress);
+    const shortAddress = wallet.walletAddress.slice(0, 7) + "...";
+    return `${wallet.walletName}(${isExpanded ? wallet.walletAddress : shortAddress})`;
+  };
+
   return (
     <div style={s.container}>
       <h2 style={s.title}>Charity Wallets</h2>
@@ -41,7 +58,7 @@ export function CharityWalletsPage() {
       <div
         style={{
           ...s.formStack,
-          maxHeight: "400px", // scrollable height
+          maxHeight: "400px",
           overflowY: "auto",
           border: "1px solid #ccc",
           padding: 10,
@@ -65,7 +82,12 @@ export function CharityWalletsPage() {
                 }}
               >
                 <div>
-                  <strong>{wallet.walletAddress}</strong> <br />
+                  <div
+                    style={{ cursor: "pointer", textDecoration: "underline" }}
+                    onClick={() => toggleExpand(wallet.walletAddress)}
+                  >
+                    <strong>{renderWalletLabel(wallet)}</strong>
+                  </div>
                   <small>Admin: {wallet.admin}</small> <br />
                   <small>
                     Initialized: {new Date(wallet.timestamp).toLocaleString()}

@@ -2,7 +2,7 @@ import React from "react";
 
 interface AdminPanelProps {
   isAdmin: boolean;
-  isCharity: boolean;
+  walletMode: Number;
   styles: any;
   setShowInviteModal: (show: boolean) => void;
   openGovernanceModal: () => void;
@@ -13,7 +13,7 @@ interface AdminPanelProps {
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
   isAdmin,
-  isCharity,
+  walletMode,
   styles: s,
   setShowInviteModal,
   openGovernanceModal,
@@ -27,7 +27,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       <div style={s.sideBody}>
         {isAdmin ? (
           <>
-            {!isCharity && (
+            {walletMode !== 2 && (
               <>
                 <button
                   style={s.primaryButton}
@@ -53,7 +53,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               Update Limits
             </button>
 
-            {isCharity && (
+            {walletMode === 2 && (
               <>
                 <div style={{ height: 16 }} />
                 <button

@@ -47,7 +47,7 @@ export function WalletDetailsPage() {
 
   const [showGovernanceModal, setShowGovernanceModal] = useState(false);
   const [onlyAdminsInitiate, setOnlyAdminsInitiate] = useState(false);
-  const [onlyAdminsVote, setOnlyAdminsVote] = useState(false);
+
   const [adminsCanVeto, setAdminsCanVeto] = useState(false);
   const [votingMode, setVotingMode] = useState<number>(MODE_MAJORITY);
   const [tierTwo, setTierTwo] = useState("");
@@ -152,7 +152,6 @@ export function WalletDetailsPage() {
   function openGovernanceModal() {
     if (!walletData) return;
     setOnlyAdminsInitiate(walletData.only_admins_can_initiate);
-    setOnlyAdminsVote(walletData.only_admins_can_vote);
     setAdminsCanVeto(walletData.admins_can_veto);
     setVotingMode(walletData.voting_mode);
     setTierTwo(fromOctas(walletData.tier_two_threshold));
@@ -170,7 +169,6 @@ export function WalletDetailsPage() {
         functionArguments: [
           address,
           onlyAdminsInitiate,
-          onlyAdminsVote,
           adminsCanVeto,
           votingMode,
           votingMode===MODE_COMBINED ? toOctas(tierTwo) : 0,
@@ -657,7 +655,7 @@ export function WalletDetailsPage() {
           <OwnerPanel
             isOwner={isOwner}
             isLastAdmin={isLastAdmin}
-            isCharity={walletData?.is_charity}
+            walletMode={walletData?.wallet_mode}
             onShowFundModal={() => setShowFundModal(true)}
             onShowLimitsModal={() => setShowLimitsModal(true)}
             onShowLeaveModal={() => setShowLeaveModal(true)}
@@ -685,7 +683,7 @@ export function WalletDetailsPage() {
           {/* ADMIN PANEL */}
           <AdminPanel
             isAdmin={isAdmin}
-            isCharity={walletData?.is_charity}
+            walletMode={walletData?.wallet_mode}
             styles={s}
             setShowInviteModal={setShowInviteModal}
             openGovernanceModal={openGovernanceModal}
@@ -714,14 +712,12 @@ export function WalletDetailsPage() {
       <GovernanceModal
         show={showGovernanceModal}
         onlyAdminsInitiate={onlyAdminsInitiate}
-        onlyAdminsVote={onlyAdminsVote}
         adminsCanVeto={adminsCanVeto}
         votingMode={votingMode}
         MODE_COMBINED={MODE_COMBINED}
         tierTwo={tierTwo}
         tierThree={tierThree}
         setOnlyAdminsInitiate={setOnlyAdminsInitiate}
-        setOnlyAdminsVote={setOnlyAdminsVote}
         setAdminsCanVeto={setAdminsCanVeto}
         setVotingMode={setVotingMode}
         setTierTwo={setTierTwo}

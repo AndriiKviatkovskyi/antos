@@ -34,7 +34,7 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
   const [showOwners, setShowOwners] = useState(false);
 
   if (!isOwner) {
-    if (walletData.is_charity) {
+    if (walletData.wallet_mode === 2) {
       return (
         <div style={s.walletBox}>
           <div
@@ -90,7 +90,7 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
       <div
         style={{
           ...s.walletHeader,
-          ...(walletData.is_charity
+          ...(walletData.wallet_mode === 2
             ? s.walletHeaderCharity
             : s.walletHeaderNormal),
         }}

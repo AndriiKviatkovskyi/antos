@@ -3,7 +3,7 @@ import React from "react";
 type OwnerPanelProps = {
   isOwner: boolean;
   isLastAdmin: boolean;
-  isCharity: boolean;
+  walletMode: Number;
   onShowFundModal: () => void;
   onShowLimitsModal: () => void;
   onShowLeaveModal: () => void;
@@ -14,7 +14,7 @@ type OwnerPanelProps = {
 const OwnerPanel: React.FC<OwnerPanelProps> = ({
   isOwner,
   isLastAdmin,
-  isCharity,
+  walletMode,
   onShowFundModal,
   onShowLimitsModal,
   onShowLeaveModal,
@@ -57,7 +57,7 @@ const OwnerPanel: React.FC<OwnerPanelProps> = ({
               </p>
             )}
 
-            {isCharity && (
+            {walletMode === 2 && (
               <>
                 <div style={{ height: 12 }} />
 

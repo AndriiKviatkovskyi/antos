@@ -2,7 +2,6 @@ interface GovernanceModalProps {
   show: boolean;
 
   onlyAdminsInitiate: boolean;
-  onlyAdminsVote: boolean;
   adminsCanVeto: boolean;
 
   votingMode: number;
@@ -12,7 +11,6 @@ interface GovernanceModalProps {
   tierThree: string;
 
   setOnlyAdminsInitiate: (value: boolean) => void;
-  setOnlyAdminsVote: (value: boolean) => void;
   setAdminsCanVeto: (value: boolean) => void;
   setVotingMode: (value: number) => void;
   setTierTwo: (value: string) => void;
@@ -27,14 +25,12 @@ interface GovernanceModalProps {
 export default function GovernanceModal({
   show,
   onlyAdminsInitiate,
-  onlyAdminsVote,
   adminsCanVeto,
   votingMode,
   MODE_COMBINED,
   tierTwo,
   tierThree,
   setOnlyAdminsInitiate,
-  setOnlyAdminsVote,
   setAdminsCanVeto,
   setVotingMode,
   setTierTwo,
@@ -58,15 +54,6 @@ export default function GovernanceModal({
               onChange={(e) => setOnlyAdminsInitiate(e.target.checked)}
             />{" "}
             Only Admins Can Initiate
-          </label>
-
-          <label>
-            <input
-              type="checkbox"
-              checked={onlyAdminsVote}
-              onChange={(e) => setOnlyAdminsVote(e.target.checked)}
-            />{" "}
-            Only Admins Can Vote
           </label>
 
           <label>

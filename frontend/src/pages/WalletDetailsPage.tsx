@@ -98,15 +98,15 @@ export function WalletDetailsPage() {
       if (resource.name) resource.name = hexToString(resource.name);
       setWalletData(resource);
       
-      const walletInfo = await aptos.view({
+      const balance = await aptos.view({
         payload:{
-          function: `${MULTISIG_MODULE}::get_wallet_info`,
+          function: `${MULTISIG_MODULE}::get_balance`,
           typeArguments: [],
           functionArguments: [address]
         }
       });
 
-      setBalance((walletInfo[0] as any).balance);
+      setBalance(balance as any);
       setStatus("");
     } catch (e) {
       console.error(e);

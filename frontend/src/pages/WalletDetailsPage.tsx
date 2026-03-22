@@ -25,6 +25,7 @@ import ProposeTransferModal from "../components/modals/ProposeTransferModal";
 import ProposalsModal from "../components/modals/ProposalsModal";
 import MonthlyPaymentsModal from "../components/modals/MonthlyPaymentsModal";
 import MemberPaymentsAdminModal from "../components/modals/MemberPaymentsAdminModal";
+import PromoteAdminModal from "../components/modals/PromoteAdminModal";
 
 
 const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
@@ -71,6 +72,9 @@ export function WalletDetailsPage() {
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [showKickModal, setShowKickModal] = useState(false);
   const [ownerToKick, setOwnerToKick] = useState<string | null>(null);
+
+  const [showPromoteModal, setShowPromoteModal] = useState(false);
+  const [ownerToPromote, setOwnerToPromote] = useState<string | null>(null);
 
   const [showProposeModal, setShowProposeModal] = useState(false);  
   const [proposalRecipient, setProposalRecipient] = useState("");
@@ -488,6 +492,29 @@ export function WalletDetailsPage() {
     }
   }
 
+  async function handlePromoteToAdmin(target: string) {
+    if (!account || !address) return;
+
+    try {
+      setStatus("Promoting to admin...");
+
+      const payload: InputEntryFunctionData = {
+        function: `${MULTISIG_MODULE}::promote_to_admin`,
+        typeArguments: [],
+        functionArguments: [address, target],
+      };
+
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+
+      await fetchData();
+      setStatus("User promoted to admin.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Failed to promote user.");
+    }
+  }
+
   async function handleProposeTransfer() {
     if (!account || !address || !proposalRecipient || !proposalAmount || proposalError) return;
 
@@ -724,6 +751,8 @@ export function WalletDetailsPage() {
             setOwnerToKick={setOwnerToKick}
             setShowKickModal={setShowKickModal}
             joinCharityWallet={joinCharityWallet}
+            setOwnerToPromote={setOwnerToPromote}
+            setShowPromoteModal={setShowPromoteModal}
           />
 
           {/* ADMIN PANEL */}
@@ -842,6 +871,20 @@ export function WalletDetailsPage() {
         setShow={setShowKickModal}
         setOwnerToKick={setOwnerToKick}
         handleKickOwner={handleKickOwner}
+        styles={s}
+      />
+
+      {/* ================= PROMOTE TO ADMIN MODAL ================= */}
+      <PromoteAdminModal
+        show={showPromoteModal}
+        ownerToPromote={ownerToPromote}
+        setShow={setShowPromoteModal}
+        setOwnerToPromote={setOwnerToPromote}
+        handlePromote={() => {
+          if (ownerToPromote) handlePromoteToAdmin(ownerToPromote);
+          setShowPromoteModal(false);
+          setOwnerToPromote(null);
+        }}
         styles={s}
       />
 

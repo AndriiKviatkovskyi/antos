@@ -13,7 +13,9 @@ interface WalletInfoProps {
   onShowProposalsModal: () => void;
   setOwnerToKick: (owner: string) => void;
   setShowKickModal: (show: boolean) => void;
-  joinCharityWallet: () => void; // NEW prop
+  joinCharityWallet: () => void;
+  setOwnerToPromote: (owner: string) => void;
+  setShowPromoteModal: (show: boolean) => void;
 }
 
 export const WalletInfo: React.FC<WalletInfoProps> = ({
@@ -30,6 +32,8 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
   setOwnerToKick,
   setShowKickModal,
   joinCharityWallet,
+  setOwnerToPromote,
+  setShowPromoteModal,
 }) => {
   const [showOwners, setShowOwners] = useState(false);
 
@@ -123,10 +127,16 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
           <ul style={s.ownersList}>
             {walletData.owners.map((owner: string) => {
               const ownerIsAdmin = walletData.admins.includes(owner);
-              const canKick =
+              const isSelf =
+                owner.toLowerCase() === currentUserHex?.toLowerCase();
+
+              const canKick = isAdmin && !ownerIsAdmin && !isSelf;
+
+              const canPromote =
                 isAdmin &&
                 !ownerIsAdmin &&
-                owner.toLowerCase() !== currentUserHex?.toLowerCase();
+                !isSelf &&
+                walletData.wallet_mode !== 1;
 
               return (
                 <li
@@ -143,23 +153,47 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
                     {ownerIsAdmin && <span style={s.adminStar}>★</span>}
                   </span>
 
-                  {canKick && (
-                    <button
-                      style={{
-                        ...s.secondaryButton,
-                        backgroundColor: "#fee2e2",
-                        border: "1px solid #ef4444",
-                        color: "#b91c1c",
-                        padding: "4px 10px",
-                        fontSize: "12px",
-                      }}
-                      onClick={() => {
-                        setOwnerToKick(owner);
-                        setShowKickModal(true);
-                      }}
-                    >
-                      Kick
-                    </button>
+                  {(canKick || canPromote) && (
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      
+                      {canPromote && (
+                        <button
+                          style={{
+                            ...s.secondaryButton,
+                            backgroundColor: "#dcfce7",
+                            border: "1px solid #16a34a",
+                            color: "#166534",
+                            padding: "4px 10px",
+                            fontSize: "12px",
+                          }}
+                          onClick={() => {
+                            setOwnerToPromote(owner);
+                            setShowPromoteModal(true);
+                          }}
+                        >
+                          Promote
+                        </button>
+                      )}
+
+                      {canKick && (
+                        <button
+                          style={{
+                            ...s.secondaryButton,
+                            backgroundColor: "#fee2e2",
+                            border: "1px solid #ef4444",
+                            color: "#b91c1c",
+                            padding: "4px 10px",
+                            fontSize: "12px",
+                          }}
+                          onClick={() => {
+                            setOwnerToKick(owner);
+                            setShowKickModal(true);
+                          }}
+                        >
+                          Kick
+                        </button>
+                      )}
+                    </div>
                   )}
                 </li>
               );

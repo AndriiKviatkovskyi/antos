@@ -25,6 +25,7 @@ model User {
 model InitializeEvent {
   id            String   @id @default(uuid())
   walletAddress String
+  walletName    String
   action        String   // "INITIALIZED" or "INITIALIZED_CHARITY"
   admin         String
   version       BigInt   @unique // Blockchain block/transaction version to prevent duplicates
@@ -34,6 +35,7 @@ model InitializeEvent {
 model MembershipEvent {
   id            String   @id @default(uuid())
   walletAddress String
+  walletName    String
   action        String   // "JOINED" or "REMOVED"
   member        String
   actor         String
@@ -44,6 +46,7 @@ model MembershipEvent {
 model InviteEvent {
   id            String   @id @default(uuid())
   walletAddress String
+  walletName    String
   action        String   // "SENT", "ACCEPTED", "REJECTED"
   invitee       String
   actor         String

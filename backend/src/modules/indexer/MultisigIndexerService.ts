@@ -42,10 +42,15 @@ const lastVersions: Record<string, bigint> = {
   GovernanceEvent: BigInt(0),
 };
 
+
 export class MultisigIndexerService {
   startPolling() {
     console.log("[indexer] Starting Multisig polling...");
     setInterval(() => this.pollEvents(), Number(POLL_INTERVAL_MS));
+  }
+
+  decodeWalletName(walletNameBytes: number[]): string {
+    return Buffer.from(walletNameBytes).toString("utf-8");
   }
 
   async pollEvents() {
@@ -119,6 +124,7 @@ export class MultisigIndexerService {
       where: { version: BigInt(e.version) },
       create: {
         walletAddress: d.wallet_address,
+        walletName: this.decodeWalletName(d.wallet_name),
         action: d.action,
         member: d.member,
         actor: d.actor,
@@ -134,6 +140,7 @@ export class MultisigIndexerService {
       where: { version: BigInt(e.version) },
       create: {
         walletAddress: d.wallet_address,
+        walletName: this.decodeWalletName(d.wallet_name),
         action: d.action,
         invitee: d.invitee,
         actor: d.actor,
@@ -149,6 +156,7 @@ export class MultisigIndexerService {
       where: { version: BigInt(e.version) },
       create: {
         walletAddress: d.wallet_address,
+        walletName: this.decodeWalletName(d.wallet_name),
         action: d.action,
         admin: d.admin,
         version: BigInt(e.version),

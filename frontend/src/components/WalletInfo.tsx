@@ -73,7 +73,11 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
         <div
           style={{
             ...s.walletHeader,
-            ...s.walletHeaderNormal,
+            ...(
+              walletData.wallet_mode === 1
+              ? s.walletHeaderSafe
+              : s.walletHeaderNormal
+            ),
           }}
         >
           <div>
@@ -90,9 +94,13 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
       <div
         style={{
           ...s.walletHeader,
-          ...(walletData.wallet_mode === 2
-            ? s.walletHeaderCharity
-            : s.walletHeaderNormal),
+          ...(
+            walletData.wallet_mode === 2
+              ? s.walletHeaderCharity
+              : walletData.wallet_mode === 1
+              ? s.walletHeaderSafe
+              : s.walletHeaderNormal
+          ),
         }}
       >
         <div>

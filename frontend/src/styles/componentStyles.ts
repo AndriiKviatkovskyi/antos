@@ -111,6 +111,7 @@ export const walletStyles = {
 
   walletHeaderNormal: { backgroundColor: "#1976d2" },
   walletHeaderCharity: { backgroundColor: "#2e7d32" },
+  walletHeaderSafe: { backgroundColor: "#6b7280" },
 
   walletName: { fontSize: "18px", fontWeight: 600 },
   walletAddress: { fontSize: "13px", opacity: 0.9 },

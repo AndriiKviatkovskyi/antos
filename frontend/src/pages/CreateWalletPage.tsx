@@ -4,10 +4,9 @@ import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 import type { InputEntryFunctionData } from "@aptos-labs/ts-sdk";
 import { profileStyles as s } from "../styles/componentStyles";
 import { MULTISIG_MODULE } from "../constants";
+import { toOctas } from "../utils/formatters";
 
-const aptos = new Aptos(
-  new AptosConfig({ network: Network.TESTNET })
-);
+const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
 
 export function CreateWalletPage() {
   const { account, signAndSubmitTransaction } = useWallet();
@@ -18,13 +17,12 @@ export function CreateWalletPage() {
   // Basic
   const [seed, setSeed] = useState("");
   const [maxOwners, setMaxOwners] = useState(5);
-  const [isCharity, setIsCharity] = useState(false);
+  const [walletMode, setWalletMode] = useState(0); // 0 = Flexible, 1 = Safe, 2 = Charity
   const [entryFee, setEntryFee] = useState("");
   const [monthlyFee, setMonthlyFee] = useState("");
 
   // Expanded
   const [onlyAdminsInitiate, setOnlyAdminsInitiate] = useState(false);
-  const [onlyAdminsVote, setOnlyAdminsVote] = useState(false);
   const [adminsCanVeto, setAdminsCanVeto] = useState(false);
   const [votingMode, setVotingMode] = useState(1);
   const [tierTwo, setTierTwo] = useState("");
@@ -34,8 +32,8 @@ export function CreateWalletPage() {
   const [monthlyLimit, setMonthlyLimit] = useState("");
   const [filterWhitelist, setFilterWhitelist] = useState(false);
 
-  const toNumberOrMinusOne = (val: string) =>
-    val === "" ? 0 : Number(val);
+  const toOctasOrMinusOne = (val: string) =>
+    val === "" ? -1 : toOctas(Number(val));
 
   const handleSubmit = async () => {
     if (!account) {
@@ -48,7 +46,6 @@ export function CreateWalletPage() {
 
       const seedBytes = new TextEncoder().encode(seed);
 
-      // --- Correct payload ---
       let payload: InputEntryFunctionData;
 
       if (!expanded) {
@@ -58,9 +55,9 @@ export function CreateWalletPage() {
           functionArguments: [
             Array.from(seedBytes),
             Number(maxOwners),
-            isCharity,
-            isCharity ? toNumberOrMinusOne(entryFee) : 0,
-            isCharity ? toNumberOrMinusOne(monthlyFee) : 0,
+            Number(walletMode),
+            walletMode === 2 ? toOctasOrMinusOne(entryFee) : 0,,
+            walletMode === 2 ? toOctasOrMinusOne(monthlyFee) : 0,
           ],
         };
       } else {
@@ -70,29 +67,25 @@ export function CreateWalletPage() {
           functionArguments: [
             Array.from(seedBytes),
             Number(maxOwners),
-            isCharity,
-            isCharity ? toNumberOrMinusOne(entryFee) : 0,
-            isCharity ? toNumberOrMinusOne(monthlyFee) : 0,
+            Number(walletMode),
+            walletMode === 2 ? toOctasOrMinusOne(entryFee) : 0,
+            walletMode === 2 ? toOctasOrMinusOne(monthlyFee) : 0,
             onlyAdminsInitiate,
-            onlyAdminsVote,
             adminsCanVeto,
             Number(votingMode),
-            votingMode === 4 ? toNumberOrMinusOne(tierTwo) : 0,
-            votingMode === 4 ? toNumberOrMinusOne(tierThree) : 0,
-            toNumberOrMinusOne(dailyLimit),
-            toNumberOrMinusOne(weeklyLimit),
-            toNumberOrMinusOne(monthlyLimit),
+            votingMode === 4 ? toOctasOrMinusOne(tierTwo) : 0,
+            votingMode === 4 ? toOctasOrMinusOne(tierThree) : 0,
+            toOctasOrMinusOne(dailyLimit),
+            toOctasOrMinusOne(weeklyLimit),
+            toOctasOrMinusOne(monthlyLimit),
             filterWhitelist,
           ],
         };
       }
 
-      // --- Pass payload correctly ---
       const response = await signAndSubmitTransaction({ data: payload });
 
-      await aptos.waitForTransaction({
-        transactionHash: response.hash,
-      });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
 
       setStatus("Wallet successfully created!");
     } catch (err) {
@@ -124,15 +117,18 @@ export function CreateWalletPage() {
         </label>
 
         <label>
-          Charity Wallet
-          <input
-            type="checkbox"
-            checked={isCharity}
-            onChange={(e) => setIsCharity(e.target.checked)}
-          />
+          Wallet Mode
+          <select
+            value={walletMode}
+            onChange={(e) => setWalletMode(Number(e.target.value))}
+          >
+            <option value={0}>Flexible</option>
+            <option value={1}>Safe</option>
+            <option value={2}>Charity</option>
+          </select>
         </label>
 
-        {isCharity && (
+        {walletMode === 2 && (
           <>
             <label>
               Entry Fee
@@ -171,15 +167,6 @@ export function CreateWalletPage() {
                 type="checkbox"
                 checked={onlyAdminsInitiate}
                 onChange={(e) => setOnlyAdminsInitiate(e.target.checked)}
-              />
-            </label>
-
-            <label>
-              Only Admins Can Vote
-              <input
-                type="checkbox"
-                checked={onlyAdminsVote}
-                onChange={(e) => setOnlyAdminsVote(e.target.checked)}
               />
             </label>
 
@@ -265,9 +252,7 @@ export function CreateWalletPage() {
           </>
         )}
 
-        <button onClick={handleSubmit}>
-          Create Wallet
-        </button>
+        <button onClick={handleSubmit}>Create Wallet</button>
 
         {status && <p style={s.statusText}>{status}</p>}
       </div>

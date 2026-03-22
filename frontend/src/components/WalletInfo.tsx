@@ -130,7 +130,7 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
               const isSelf =
                 owner.toLowerCase() === currentUserHex?.toLowerCase();
 
-              const canKick = isAdmin && !ownerIsAdmin && !isSelf;
+              const canKick = isAdmin && !ownerIsAdmin && !isSelf && walletData.wallet_mode !== 2;
 
               const canPromote =
                 isAdmin &&

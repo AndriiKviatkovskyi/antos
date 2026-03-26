@@ -26,6 +26,7 @@ import ProposalsModal from "../components/modals/ProposalsModal";
 import MonthlyPaymentsModal from "../components/modals/MonthlyPaymentsModal";
 import MemberPaymentsAdminModal from "../components/modals/MemberPaymentsAdminModal";
 import PromoteAdminModal from "../components/modals/PromoteAdminModal";
+import { KickProposalsModal } from "../components/modals/KickProposalsModal";
 
 
 const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
@@ -72,6 +73,7 @@ export function WalletDetailsPage() {
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [showKickModal, setShowKickModal] = useState(false);
   const [ownerToKick, setOwnerToKick] = useState<string | null>(null);
+  const [showKickProposals, setShowKickProposals] = useState(false);
 
   const [showPromoteModal, setShowPromoteModal] = useState(false);
   const [ownerToPromote, setOwnerToPromote] = useState<string | null>(null);
@@ -492,6 +494,54 @@ export function WalletDetailsPage() {
     }
   }
 
+  async function handleProposeKickOwner() {
+    if (!account || !address || !ownerToKick) return;
+
+    try {
+      setStatus("Creating kick proposal...");
+
+      const payload: InputEntryFunctionData = {
+        function: `${MULTISIG_MODULE}::propose_kick`,
+        typeArguments: [],
+        functionArguments: [address, ownerToKick],
+      };
+
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+
+      setShowKickModal(false);
+      setOwnerToKick(null);
+      await fetchData();
+      setStatus("Kick proposal created.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Failed to create kick proposal.");
+    }
+  }
+
+  async function handleVoteKick(proposalId: number) {
+    if (!account || !address) return;
+
+    try {
+      setStatus("Voting...");
+
+      const payload: InputEntryFunctionData = {
+        function: `${MULTISIG_MODULE}::vote_kick`,
+        typeArguments: [],
+        functionArguments: [address, proposalId],
+      };
+
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+
+      await fetchData();
+      setStatus("Vote submitted.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Failed to vote.");
+    }
+  }
+
   async function handlePromoteToAdmin(target: string) {
     if (!account || !address) return;
 
@@ -748,6 +798,7 @@ export function WalletDetailsPage() {
             styles={s}
             onShowProposeModal={() => setShowProposeModal(true)}
             onShowProposalsModal={() => setShowProposalsModal(true)}
+            onShowKickProposalsModal={() => setShowKickProposals(true)}
             setOwnerToKick={setOwnerToKick}
             setShowKickModal={setShowKickModal}
             joinCharityWallet={joinCharityWallet}
@@ -868,9 +919,21 @@ export function WalletDetailsPage() {
       <KickOwnerModal
         show={showKickModal}
         ownerToKick={ownerToKick}
+        walletMode={walletData.wallet_mode}
         setShow={setShowKickModal}
         setOwnerToKick={setOwnerToKick}
         handleKickOwner={handleKickOwner}
+        handleProposeKickOwner={handleProposeKickOwner}
+        styles={s}
+      />
+
+      {/* ================= KICK PROPOSAL MODAL ================= */}
+      <KickProposalsModal
+        show={showKickProposals}
+        walletData={walletData}
+        currentUserHex={currentUserHex}
+        handleVoteKick={handleVoteKick}
+        setShow={setShowKickProposals}
         styles={s}
       />
 

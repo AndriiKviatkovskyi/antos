@@ -11,6 +11,7 @@ interface WalletInfoProps {
   styles: any;
   onShowProposeModal: () => void;
   onShowProposalsModal: () => void;
+  onShowKickProposalsModal: () => void;
   setOwnerToKick: (owner: string) => void;
   setShowKickModal: (show: boolean) => void;
   joinCharityWallet: () => void;
@@ -29,6 +30,7 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
   styles: s,
   onShowProposeModal,
   onShowProposalsModal,
+  onShowKickProposalsModal,
   setOwnerToKick,
   setShowKickModal,
   joinCharityWallet,
@@ -224,6 +226,15 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
 
           {walletData.only_admins_can_initiate && !isAdmin && (
             <p style={s.errorText}>Only admins can initiate proposals.</p>
+          )}
+
+          {walletData.wallet_mode === 1 && (
+            <button
+              style={s.secondaryButton}
+              onClick={onShowKickProposalsModal}
+            >
+              Kick Proposals
+            </button>
           )}
         </div>
       </div>

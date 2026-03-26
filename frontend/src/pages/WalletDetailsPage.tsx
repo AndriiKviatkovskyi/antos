@@ -643,6 +643,29 @@ export function WalletDetailsPage() {
     }
   }
 
+  async function handleVeto(proposalId: number | string) {
+    if (!account || !address) return;
+
+    try {
+      setStatus("Vetoing proposal...");
+
+      const payload: InputEntryFunctionData = {
+        function: `${MULTISIG_MODULE}::veto`,
+        typeArguments: [],
+        functionArguments: [address, proposalId],
+      };
+
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+
+      await fetchData();
+      setStatus("Proposal vetoed.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Failed to veto proposal.");
+    }
+  }
+
   async function joinCharityWallet() {
     if (!account || !address) return;
 
@@ -976,6 +999,9 @@ export function WalletDetailsPage() {
         expandedApprovals={expandedApprovals}
         setExpandedApprovals={setExpandedApprovals}
         handleVote={handleVote}
+        handleVeto={handleVeto} // ✅ ДОДАТИ
+        walletMode={walletData.wallet_mode} // ✅ ДОДАТИ
+        adminsCanVeto={walletData.admins_can_veto} // ✅ ДОДАТИ
         formatApt={formatApt}
         setShow={setShowProposalsModal}
         MODE_COMBINED={MODE_COMBINED}

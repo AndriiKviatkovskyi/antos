@@ -3,15 +3,15 @@ interface Proposal {
   creator: string;
   recipient: string;
   amount: number;
+  approvals: string[];
+  status: number;
+  created_at: number;
   earliest_execution_time: number;
   expiry_time: number;
-  approvals: string[];
-  is_executed: boolean;
 }
 
 interface WalletData {
   proposals: Proposal[];
-  only_admins_can_vote: boolean;
   admins: string[];
   owners: string[];
   voting_mode: number;
@@ -26,6 +26,9 @@ interface ProposalsModalProps {
   expandedApprovals: string | number | null;
   setExpandedApprovals: (value: string | number | null) => void;
   handleVote: (proposalId: string | number) => void;
+  handleVeto: (proposalId: string | number) => void;
+  walletMode: number;
+  adminsCanVeto: boolean;
   formatApt: (value: number) => string;
   setShow: (value: boolean) => void;
   MODE_COMBINED: number;
@@ -40,6 +43,9 @@ export default function ProposalsModal({
   expandedApprovals,
   setExpandedApprovals,
   handleVote,
+  handleVeto,
+  walletMode,
+  adminsCanVeto,
   formatApt,
   setShow,
   MODE_COMBINED,
@@ -47,6 +53,25 @@ export default function ProposalsModal({
   styles,
 }: ProposalsModalProps) {
   if (!show || !walletData) return null;
+
+  const getStatusText = (status: number) => {
+    switch (status) {
+      case 0:
+        return "Pending";
+      case 1:
+        return "Executed";
+      case 2:
+        return "Cancelled";
+      case 3:
+        return "Vetoed";
+      case 4:
+        return "Cancelled (Gov)";
+      default:
+        return "Unknown";
+    }
+  };
+
+  const isFinalStatus = (status: number) => status !== 0;
 
   return (
     <div style={styles.modalOverlay}>
@@ -57,9 +82,7 @@ export default function ProposalsModal({
           ?.slice()
           .reverse()
           .map((proposal: Proposal) => {
-            const totalVoters = walletData.only_admins_can_vote
-              ? walletData.admins.length
-              : walletData.owners.length;
+            const totalVoters = walletData.owners.length;
 
             let activeMode = walletData.voting_mode;
 
@@ -72,8 +95,8 @@ export default function ProposalsModal({
             }
 
             const approvalsCount = proposal.approvals.length;
-            let requiredVotes = totalVoters;
 
+            let requiredVotes = totalVoters;
             if (activeMode === MODE_MAJORITY)
               requiredVotes = Math.floor(totalVoters / 2) + 1;
             else if (activeMode === 2)
@@ -85,45 +108,61 @@ export default function ProposalsModal({
             const notExpired =
               proposal.expiry_time === 0 || now <= proposal.expiry_time;
 
+            const isPending = proposal.status === 0;
+
             const voteDisabled =
-              proposal.is_executed ||
-              (walletData.only_admins_can_vote && !isAdmin) ||
+              !isPending ||
               !timelockPassed ||
               !notExpired;
+
+            const canVeto =
+              isAdmin &&
+              adminsCanVeto &&
+              walletMode !== 1 &&
+              isPending;
 
             return (
               <div key={proposal.id} style={styles.proposalCard}>
                 <div style={{ flex: 1 }}>
+                  <p><b>ID:</b> {proposal.id}</p>
+                  <p><b>Creator:</b> {proposal.creator}</p>
+                  <p><b>Recipient:</b> {proposal.recipient}</p>
+                  <p><b>Amount:</b> {formatApt(proposal.amount)} APT</p>
+
                   <p>
-                    <b>ID:</b> {proposal.id}
+                    <b>Status:</b>{" "}
+                    <span style={{ fontWeight: 600 }}>
+                      {getStatusText(proposal.status)}
+                    </span>
                   </p>
+
                   <p>
-                    <b>Creator:</b> {proposal.creator}
+                    <b>Created:</b>{" "}
+                    {new Date(proposal.created_at * 1000).toLocaleString()}
                   </p>
-                  <p>
-                    <b>Recipient:</b> {proposal.recipient}
-                  </p>
-                  <p>
-                    <b>Amount:</b> {formatApt(proposal.amount)} APT
-                  </p>
+
                   <p>
                     <b>Earliest Execution:</b>{" "}
                     {new Date(
                       proposal.earliest_execution_time * 1000
                     ).toLocaleString()}
                   </p>
+
                   <p>
                     <b>Expiry:</b>{" "}
                     {proposal.expiry_time === 0
                       ? "No expiry"
-                      : new Date(proposal.expiry_time * 1000).toLocaleString()}
+                      : new Date(
+                          proposal.expiry_time * 1000
+                        ).toLocaleString()}
                   </p>
                 </div>
 
                 <div style={{ width: 260 }}>
-                  {proposal.is_executed ? (
+                  {isFinalStatus(proposal.status) ? (
                     <p style={{ fontWeight: 600 }}>
-                      Executed with {approvalsCount} votes
+                      {getStatusText(proposal.status)} with{" "}
+                      {approvalsCount} votes
                     </p>
                   ) : (
                     <p style={{ fontWeight: 600 }}>
@@ -154,7 +193,8 @@ export default function ProposalsModal({
                     </ul>
                   )}
 
-                  {!proposal.is_executed && (
+                  {/* VOTE */}
+                  {isPending && (
                     <button
                       style={{
                         ...styles.primaryButton,
@@ -166,6 +206,25 @@ export default function ProposalsModal({
                       onClick={() => handleVote(proposal.id)}
                     >
                       Vote
+                    </button>
+                  )}
+
+                  {/* VETO */}
+                  {isPending && (
+                    <button
+                      style={{
+                        ...styles.secondaryButton,
+                        marginTop: 8,
+                        backgroundColor: "#fef3c7",
+                        border: "1px solid #f59e0b",
+                        color: "#92400e",
+                        opacity: canVeto ? 1 : 0.5,
+                        cursor: canVeto ? "pointer" : "not-allowed",
+                      }}
+                      disabled={!canVeto}
+                      onClick={() => handleVeto(proposal.id)}
+                    >
+                      Veto
                     </button>
                   )}
                 </div>

@@ -3,6 +3,7 @@ import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { profileStyles as s } from "../styles/componentStyles"; 
 import { API_BASE } from "../constants";
 import { useNavigate } from "react-router-dom";
+import { hexToString } from "../utils/aptosHelpers";
 
 interface WalletInfo {
   walletAddress: string;
@@ -41,7 +42,6 @@ export function MyWalletsPage() {
     fetchWallets();
   }, [account]);
 
-  // Тогл розгортання/згортання адреси
   const toggleExpand = (address: string) => {
     setExpandedWallets(prev => {
       const newSet = new Set(prev);
@@ -51,11 +51,11 @@ export function MyWalletsPage() {
     });
   };
 
-  // Формуємо рядок для відображення
   const renderWalletLabel = (wallet: WalletInfo) => {
     const isExpanded = expandedWallets.has(wallet.walletAddress);
     const shortAddress = wallet.walletAddress.slice(0, 7) + "...";
-    return `${wallet.walletName}(${isExpanded ? wallet.walletAddress : shortAddress})`;
+    const decodedName = hexToString(wallet.walletName);
+    return `${decodedName} (${isExpanded ? wallet.walletAddress : shortAddress})`;
   };
 
   return (

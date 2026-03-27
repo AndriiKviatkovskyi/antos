@@ -103,6 +103,7 @@ export function WalletDetailsPage() {
 
       if (resource.name) resource.name = hexToString(resource.name);
       setWalletData(resource);
+      console.log(walletData)
       
       const balance = await aptos.view({
         payload:{
@@ -672,6 +673,30 @@ export function WalletDetailsPage() {
     }
   }
 
+  async function handleExecute(proposalId: number | string) {
+    if (!account || !address) return;
+
+    try {
+      setStatus("Executing proposal...");
+
+      const payload: InputEntryFunctionData = {
+        function: `${MULTISIG_MODULE}::execute`,
+        typeArguments: [],
+        functionArguments: [address, proposalId],
+      };
+
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+
+      await fetchData();
+      setStatus("Proposal executed.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Execution failed.");
+    }
+  }
+
+
   async function handleVeto(proposalId: number | string) {
     if (!account || !address) return;
 
@@ -971,7 +996,7 @@ export function WalletDetailsPage() {
       <KickOwnerModal
         show={showKickModal}
         ownerToKick={ownerToKick}
-        walletMode={walletData.wallet_mode}
+        walletMode={walletData?.wallet_mode}
         setShow={setShowKickModal}
         setOwnerToKick={setOwnerToKick}
         handleKickOwner={handleKickOwner}
@@ -1030,8 +1055,9 @@ export function WalletDetailsPage() {
         handleVote={handleVote}
         handleVeto={handleVeto}
         handleCancel={handleCancel}
-        walletMode={walletData.wallet_mode}
-        adminsCanVeto={walletData.admins_can_veto}
+        handleExecute={handleExecute}
+        walletMode={walletData?.wallet_mode}
+        adminsCanVeto={walletData?.admins_can_veto}
         formatApt={formatApt}
         setShow={setShowProposalsModal}
         MODE_COMBINED={MODE_COMBINED}

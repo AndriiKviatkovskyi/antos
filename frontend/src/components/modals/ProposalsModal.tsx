@@ -30,6 +30,7 @@ interface ProposalsModalProps {
   handleVote: (proposalId: string | number) => void;
   handleVeto: (proposalId: string | number) => void;
   handleCancel: (proposalId: string | number) => void;
+  handleExecute: (proposalId: string | number) => void;
   walletMode: number;
   adminsCanVeto: boolean;
   formatApt: (value: number) => string;
@@ -49,6 +50,7 @@ export default function ProposalsModal({
   handleVote,
   handleVeto,
   handleCancel,
+  handleExecute,
   walletMode,
   adminsCanVeto,
   formatApt,
@@ -60,6 +62,7 @@ export default function ProposalsModal({
 }: ProposalsModalProps) {
   if (!show || !walletData) return null;
 
+  const now = Math.floor(Date.now() / 1000);
 
   const getStatusText = (status: number) => {
     switch (status) {
@@ -88,6 +91,7 @@ export default function ProposalsModal({
 
           const approvalsCount = validApprovals.length;
 
+          // 🔹 Voting mode logic
           let activeMode = walletData.voting_mode;
 
           if (activeMode === MODE_COMBINED) {
@@ -106,13 +110,16 @@ export default function ProposalsModal({
           else if (activeMode === 3)
             requiredVotes = totalVoters;
 
-          const now = Math.floor(Date.now() / 1000);
+          const thresholdMet = approvalsCount >= requiredVotes;
+
+          // 🔹 Time checks
           const timelockPassed = now >= proposal.earliest_execution_time;
           const notExpired =
             proposal.expiry_time === 0 || now <= proposal.expiry_time;
 
           const isPending = proposal.status === 0;
 
+          // 🔹 Actions logic
           const voteDisabled =
             !isPending || !timelockPassed || !notExpired;
 
@@ -124,6 +131,14 @@ export default function ProposalsModal({
 
           const canCancel =
             isPending &&
+            currentUser &&
+            proposal.creator === currentUser;
+
+          const canExecute =
+            isPending &&
+            thresholdMet &&
+            timelockPassed &&
+            notExpired &&
             currentUser &&
             proposal.creator === currentUser;
 
@@ -205,6 +220,22 @@ export default function ProposalsModal({
                     onClick={() => handleVote(proposal.id)}
                   >
                     Vote
+                  </button>
+                )}
+
+                {/* ✅ EXECUTE */}
+                {canExecute && (
+                  <button
+                    style={{
+                      ...styles.primaryButton,
+                      marginTop: 8,
+                      backgroundColor: "#d1fae5",
+                      border: "1px solid #10b981",
+                      color: "#065f46",
+                    }}
+                    onClick={() => handleExecute(proposal.id)}
+                  >
+                    Execute
                   </button>
                 )}
 

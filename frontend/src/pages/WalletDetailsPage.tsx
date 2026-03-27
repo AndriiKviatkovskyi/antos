@@ -620,6 +620,35 @@ export function WalletDetailsPage() {
     }
   }
 
+  async function handleCancel(proposalId: string | number) {
+    if (!account || !address) return;
+
+    try {
+      setStatus("Cancelling proposal...");
+
+      const payload: InputEntryFunctionData = {
+        function: `${MULTISIG_MODULE}::cancel_proposal`,
+        typeArguments: [],
+        functionArguments: [
+          address,
+          Number(proposalId),
+        ],
+      };
+
+      const response = await signAndSubmitTransaction({ data: payload });
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+
+      await fetchData();
+
+      setStatus("Proposal cancelled successfully.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Failed to cancel proposal.");
+    }
+  }
+
+  
+
   async function handleVote(proposalId: number | string) {
     if (!account || !address) return;
 
@@ -999,13 +1028,15 @@ export function WalletDetailsPage() {
         expandedApprovals={expandedApprovals}
         setExpandedApprovals={setExpandedApprovals}
         handleVote={handleVote}
-        handleVeto={handleVeto} // ✅ ДОДАТИ
-        walletMode={walletData.wallet_mode} // ✅ ДОДАТИ
-        adminsCanVeto={walletData.admins_can_veto} // ✅ ДОДАТИ
+        handleVeto={handleVeto}
+        handleCancel={handleCancel}
+        walletMode={walletData.wallet_mode}
+        adminsCanVeto={walletData.admins_can_veto}
         formatApt={formatApt}
         setShow={setShowProposalsModal}
         MODE_COMBINED={MODE_COMBINED}
         MODE_MAJORITY={MODE_MAJORITY}
+        currentUser={address}
         styles={s}
       />
 

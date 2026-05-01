@@ -1,3 +1,37 @@
+import React, { useState, useEffect } from "react";
+import { fetchNicknameByAddress } from "../../utils/userHelpers";
+
+const AddressLabel = ({ 
+  addr, 
+  nicknames 
+}: { 
+  addr: string, 
+  nicknames: Record<string, string> 
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const nick = nicknames[addr];
+
+  const shortAddr = `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  const displayAddr = isExpanded ? addr : shortAddr;
+
+  if (nick) {
+    return (
+      <span 
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsExpanded(!isExpanded);
+        }} 
+        style={{ cursor: "pointer", textDecoration: "underline" }}
+        title="Click to toggle full address"
+      >
+        {nick} ({displayAddr})
+      </span>
+    );
+  }
+
+  return <span>{addr}</span>;
+};
+
 interface Proposal {
   id: number | string;
   creator: string;
@@ -60,6 +94,28 @@ export default function ProposalsModal({
   currentUser,
   styles,
 }: ProposalsModalProps) {
+  const [nicknames, setNicknames] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (show && walletData?.proposals) {
+      const addressesToFetch = new Set<string>();
+      walletData.proposals.forEach((p) => {
+        addressesToFetch.add(p.creator);
+        addressesToFetch.add(p.recipient);
+        p.approvals.forEach((addr) => addressesToFetch.add(addr));
+      });
+
+      addressesToFetch.forEach(async (addr) => {
+        if (!nicknames[addr]) {
+          const nick = await fetchNicknameByAddress(addr);
+          if (nick) {
+            setNicknames((prev) => ({ ...prev, [addr]: nick }));
+          }
+        }
+      });
+    }
+  }, [show, walletData]);
+
   if (!show || !walletData) return null;
 
   const now = Math.floor(Date.now() / 1000);
@@ -84,16 +140,12 @@ export default function ProposalsModal({
 
         {walletData.proposals?.slice().reverse().map((proposal: Proposal) => {
           const totalVoters = walletData.owners.length;
-
           const validApprovals = proposal.approvals.filter(addr =>
             walletData.owners.includes(addr)
           );
-
           const approvalsCount = validApprovals.length;
 
-          // 🔹 Voting mode logic
           let activeMode = walletData.voting_mode;
-
           if (activeMode === MODE_COMBINED) {
             if (proposal.amount < walletData.tier_two_threshold)
               activeMode = MODE_MAJORITY;
@@ -111,43 +163,22 @@ export default function ProposalsModal({
             requiredVotes = totalVoters;
 
           const thresholdMet = approvalsCount >= requiredVotes;
-
-          // 🔹 Time checks
           const timelockPassed = now >= proposal.earliest_execution_time;
-          const notExpired =
-            proposal.expiry_time === 0 || now <= proposal.expiry_time;
-
+          const notExpired = proposal.expiry_time === 0 || now <= proposal.expiry_time;
           const isPending = proposal.status === 0;
 
-          // 🔹 Actions logic
-          const voteDisabled =
-            !isPending || !timelockPassed || !notExpired;
-
-          const canVeto =
-            isAdmin &&
-            adminsCanVeto &&
-            walletMode !== 1 &&
-            isPending;
-
-          const canCancel =
-            isPending &&
-            currentUser &&
-            proposal.creator === currentUser;
-
-          const canExecute =
-            isPending &&
-            thresholdMet &&
-            timelockPassed &&
-            notExpired &&
-            currentUser &&
-            proposal.creator === currentUser;
+          const voteDisabled = !isPending || !timelockPassed || !notExpired;
+          const canVeto = isAdmin && adminsCanVeto && walletMode !== 1 && isPending;
+          const canCancel = isPending && currentUser && proposal.creator === currentUser;
+          const canExecute = isPending && thresholdMet && timelockPassed && notExpired && 
+                             currentUser && proposal.creator === currentUser;
 
           return (
             <div key={proposal.id} style={styles.proposalCard}>
               <div style={{ flex: 1 }}>
                 <p><b>ID:</b> {proposal.id}</p>
-                <p><b>Creator:</b> {proposal.creator}</p>
-                <p><b>Recipient:</b> {proposal.recipient}</p>
+                <p><b>Creator:</b> <AddressLabel addr={proposal.creator} nicknames={nicknames} /></p>
+                <p><b>Recipient:</b> <AddressLabel addr={proposal.recipient} nicknames={nicknames} /></p>
                 <p><b>Amount:</b> {formatApt(proposal.amount)} APT</p>
 
                 <p>
@@ -157,22 +188,9 @@ export default function ProposalsModal({
                   </span>
                 </p>
 
-                <p>
-                  <b>Created:</b>{" "}
-                  {new Date(proposal.created_at * 1000).toLocaleString()}
-                </p>
-
-                <p>
-                  <b>Earliest Execution:</b>{" "}
-                  {new Date(proposal.earliest_execution_time * 1000).toLocaleString()}
-                </p>
-
-                <p>
-                  <b>Expiry:</b>{" "}
-                  {proposal.expiry_time === 0
-                    ? "No expiry"
-                    : new Date(proposal.expiry_time * 1000).toLocaleString()}
-                </p>
+                <p><b>Created:</b> {new Date(proposal.created_at * 1000).toLocaleString()}</p>
+                <p><b>Earliest Execution:</b> {new Date(proposal.earliest_execution_time * 1000).toLocaleString()}</p>
+                <p><b>Expiry:</b> {proposal.expiry_time === 0 ? "No expiry" : new Date(proposal.expiry_time * 1000).toLocaleString()}</p>
               </div>
 
               <div style={{ width: 260 }}>
@@ -189,25 +207,23 @@ export default function ProposalsModal({
                 <button
                   style={styles.secondaryButton}
                   onClick={() =>
-                    setExpandedApprovals(
-                      expandedApprovals === proposal.id ? null : proposal.id
-                    )
+                    setExpandedApprovals(expandedApprovals === proposal.id ? null : proposal.id)
                   }
                 >
-                  View Approvals
+                  {expandedApprovals === proposal.id ? "Hide Approvals" : "View Approvals"}
                 </button>
 
                 {expandedApprovals === proposal.id && (
                   <ul style={styles.ownersList}>
                     {validApprovals.map((addr: string) => (
                       <li key={addr} style={styles.ownerItem}>
-                        {addr}
+                        <AddressLabel addr={addr} nicknames={nicknames} />
                       </li>
                     ))}
                   </ul>
                 )}
 
-                {/* VOTE */}
+                {/* --- Action Buttons --- */}
                 {isPending && (
                   <button
                     style={{
@@ -223,7 +239,6 @@ export default function ProposalsModal({
                   </button>
                 )}
 
-                {/* ✅ EXECUTE */}
                 {canExecute && (
                   <button
                     style={{
@@ -239,7 +254,6 @@ export default function ProposalsModal({
                   </button>
                 )}
 
-                {/* VETO */}
                 {isPending && (
                   <button
                     style={{
@@ -258,7 +272,6 @@ export default function ProposalsModal({
                   </button>
                 )}
 
-                {/* CANCEL */}
                 {canCancel && (
                   <button
                     style={{
@@ -279,10 +292,7 @@ export default function ProposalsModal({
         })}
 
         <div style={styles.modalButtons}>
-          <button
-            style={styles.secondaryButton}
-            onClick={() => setShow(false)}
-          >
+          <button style={styles.secondaryButton} onClick={() => setShow(false)}>
             Close
           </button>
         </div>

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { fetchNicknameByAddress } from "../utils/userHelpers";
 
 interface WalletInfoProps {
   walletData: any;
@@ -38,17 +39,47 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
   setShowPromoteModal,
 }) => {
   const [showOwners, setShowOwners] = useState(false);
+  const [nicknames, setNicknames] = useState<Record<string, string>>({});
+  const [expandedOwners, setExpandedOwners] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (walletData?.owners) {
+      walletData.owners.forEach(async (ownerAddr: string) => {
+        if (!nicknames[ownerAddr]) {
+          const nick = await fetchNicknameByAddress(ownerAddr);
+          if (nick) {
+            setNicknames((prev) => ({ ...prev, [ownerAddr]: nick }));
+          }
+        }
+      });
+    }
+  }, [walletData.owners]);
+
+  const toggleOwnerAddress = (ownerAddr: string) => {
+    setExpandedOwners((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(ownerAddr)) newSet.delete(ownerAddr);
+      else newSet.add(ownerAddr);
+      return newSet;
+    });
+  };
+
+  const renderOwnerLabel = (addr: string) => {
+    const isExpanded = expandedOwners.has(addr);
+    const nick = nicknames[addr];
+    const displayAddr = isExpanded ? addr : `${addr.slice(0, 7)}...`;
+
+    if (nick) {
+      return `${nick} (${displayAddr})`;
+    }
+    return addr;
+  };
 
   if (!isOwner) {
     if (walletData.wallet_mode === 2) {
       return (
         <div style={s.walletBox}>
-          <div
-            style={{
-              ...s.walletHeader,
-              ...s.walletHeaderCharity,
-            }}
-          >
+          <div style={{ ...s.walletHeader, ...s.walletHeaderCharity }}>
             <div>
               <div style={s.walletName}>{walletData.name}</div>
               <div style={s.walletAddress}>{address}</div>
@@ -59,7 +90,7 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
             <button
               style={{
                 ...s.primaryButton,
-                backgroundColor: "#22c55e", // green
+                backgroundColor: "#22c55e",
                 color: "white",
                 padding: "10px 20px",
                 fontSize: "16px",
@@ -79,11 +110,9 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
         <div
           style={{
             ...s.walletHeader,
-            ...(
-              walletData.wallet_mode === 1
+            ...(walletData.wallet_mode === 1
               ? s.walletHeaderSafe
-              : s.walletHeaderNormal
-            ),
+              : s.walletHeaderNormal),
           }}
         >
           <div>
@@ -100,13 +129,11 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
       <div
         style={{
           ...s.walletHeader,
-          ...(
-            walletData.wallet_mode === 2
-              ? s.walletHeaderCharity
-              : walletData.wallet_mode === 1
-              ? s.walletHeaderSafe
-              : s.walletHeaderNormal
-          ),
+          ...(walletData.wallet_mode === 2
+            ? s.walletHeaderCharity
+            : walletData.wallet_mode === 1
+            ? s.walletHeaderSafe
+            : s.walletHeaderNormal),
         }}
       >
         <div>
@@ -116,13 +143,11 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
       </div>
 
       <div style={s.walletBody}>
-        {/* Balance */}
         <div>Apt Balance: {balance ? `${formatApt(balance)} APT` : "N/A"}</div>
 
-        {/* Owners list */}
         <div style={s.ownersHeader} onClick={() => setShowOwners(!showOwners)}>
-          {showOwners ? "▼" : "▶"} Owners (
-          {walletData.owners.length}/{walletData.max_owners})
+          {showOwners ? "▼" : "▶"} Owners ({walletData.owners.length}/
+          {walletData.max_owners})
         </div>
 
         {showOwners && (
@@ -132,7 +157,11 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
               const isSelf =
                 owner.toLowerCase() === currentUserHex?.toLowerCase();
 
-              const canKick = isAdmin && !ownerIsAdmin && !isSelf && walletData.wallet_mode !== 2;
+              const canKick =
+                isAdmin &&
+                !ownerIsAdmin &&
+                !isSelf &&
+                walletData.wallet_mode !== 2;
 
               const canPromote =
                 isAdmin &&
@@ -150,14 +179,22 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
                     alignItems: "center",
                   }}
                 >
-                  <span>
-                    {owner}
+                  <div>
+                    <span
+                      onClick={() => nicknames[owner] && toggleOwnerAddress(owner)}
+                      style={{ 
+                        cursor: nicknames[owner] ? "pointer" : "default",
+                        textDecoration: nicknames[owner] ? "underline" : "none" 
+                      }}
+                    >
+                      {renderOwnerLabel(owner)}
+                    </span>
                     {ownerIsAdmin && <span style={s.adminStar}>★</span>}
-                  </span>
+                    {isSelf && <small style={{ marginLeft: 5, color: "#666" }}>(You)</small>}
+                  </div>
 
                   {(canKick || canPromote) && (
                     <div style={{ display: "flex", gap: "6px" }}>
-                      
                       {canPromote && (
                         <button
                           style={{
@@ -203,12 +240,12 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
           </ul>
         )}
 
-        {/* Proposal buttons */}
         <div style={{ marginTop: 16 }}>
           <button
             style={{
               ...s.primaryButton,
-              opacity: walletData.only_admins_can_initiate && !isAdmin ? 0.5 : 1,
+              opacity:
+                walletData.only_admins_can_initiate && !isAdmin ? 0.5 : 1,
               cursor:
                 walletData.only_admins_can_initiate && !isAdmin
                   ? "not-allowed"

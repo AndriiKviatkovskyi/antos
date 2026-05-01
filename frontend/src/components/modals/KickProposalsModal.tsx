@@ -1,3 +1,37 @@
+import React, { useState, useEffect } from "react";
+import { fetchNicknameByAddress } from "../../utils/userHelpers";
+
+const AddressLabel = ({ 
+  addr, 
+  nicknames 
+}: { 
+  addr: string, 
+  nicknames: Record<string, string> 
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const nick = nicknames[addr];
+
+  const shortAddr = `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  const displayAddr = isExpanded ? addr : shortAddr;
+
+  if (nick) {
+    return (
+      <span 
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsExpanded(!isExpanded);
+        }} 
+        style={{ cursor: "pointer", textDecoration: "underline" }}
+        title="Click to toggle full address"
+      >
+        {nick} ({displayAddr})
+      </span>
+    );
+  }
+
+  return <span>{addr}</span>;
+};
+
 interface KickProposal {
   id: number;
   initiator: string;
@@ -24,6 +58,31 @@ export function KickProposalsModal({
   setShow,
   styles,
 }: KickProposalsModalProps) {
+  const [nicknames, setNicknames] = useState<Record<string, string>>({});
+  const [expandedApprovalsId, setExpandedApprovalsId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (show && walletData?.kick_proposals) {
+      const addressesToFetch = new Set<string>();
+      walletData.kick_proposals.forEach((p: KickProposal) => {
+        if (p.active) {
+          addressesToFetch.add(p.initiator);
+          addressesToFetch.add(p.target);
+          p.approvals.forEach((addr) => addressesToFetch.add(addr));
+        }
+      });
+
+      addressesToFetch.forEach(async (addr) => {
+        if (!nicknames[addr]) {
+          const nick = await fetchNicknameByAddress(addr);
+          if (nick) {
+            setNicknames((prev) => ({ ...prev, [addr]: nick }));
+          }
+        }
+      });
+    }
+  }, [show, walletData]);
+
   if (!show || !walletData) return null;
 
   const proposals: KickProposal[] =
@@ -44,16 +103,20 @@ export function KickProposalsModal({
           .reverse()
           .map((p: KickProposal) => {
             const approvalsCount = p.approvals.length;
-            const alreadyVoted = p.approvals.includes(
-              currentUserHex?.toLowerCase()! // TODO: TS for this line
+            const alreadyVoted = p.approvals.some(
+              (addr) => addr.toLowerCase() === currentUserHex?.toLowerCase()
             );
 
             return (
               <div key={p.id} style={styles.proposalCard}>
                 <div style={{ flex: 1 }}>
                   <p><b>ID:</b> {p.id}</p>
-                  <p><b>Initiator:</b> {p.initiator}</p>
-                  <p><b>Target:</b> {p.target}</p>
+                  <p>
+                    <b>Initiator:</b> <AddressLabel addr={p.initiator} nicknames={nicknames} />
+                  </p>
+                  <p>
+                    <b>Target:</b> <AddressLabel addr={p.target} nicknames={nicknames} />
+                  </p>
                   <p>
                     <b>Created:</b>{" "}
                     {new Date(p.created_at * 1000).toLocaleString()}
@@ -67,11 +130,21 @@ export function KickProposalsModal({
                   <button
                     style={styles.secondaryButton}
                     onClick={() =>
-                      alert(p.approvals.join("\n"))
+                      setExpandedApprovalsId(expandedApprovalsId === p.id ? null : p.id)
                     }
                   >
-                    View Approvals
+                    {expandedApprovalsId === p.id ? "Hide Approvals" : "View Approvals"}
                   </button>
+
+                  {expandedApprovalsId === p.id && (
+                    <ul style={{ ...styles.ownersList, marginTop: 8, maxHeight: "150px", overflowY: "auto" }}>
+                      {p.approvals.map((addr: string) => (
+                        <li key={addr} style={styles.ownerItem}>
+                          <AddressLabel addr={addr} nicknames={nicknames} />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
 
                   <button
                     style={{
@@ -83,7 +156,7 @@ export function KickProposalsModal({
                     disabled={alreadyVoted}
                     onClick={() => handleVoteKick(p.id)}
                   >
-                    Vote
+                    {alreadyVoted ? "Already Voted" : "Vote Kick"}
                   </button>
                 </div>
               </div>

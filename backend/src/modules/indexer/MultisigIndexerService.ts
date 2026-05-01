@@ -6,7 +6,6 @@ dotenv.config();
 
 const { NODE_URL, CONTRACT_ADDRESS, POLL_INTERVAL_MS = 3000 } = process.env;
 
-// Mapping each event type to the ModuleEvents resource and the EventHandle field
 const eventMapping: Record<
   string,
   { structTag: string; fieldName: string }
@@ -33,7 +32,6 @@ const eventMapping: Record<
   },
 };
 
-// Track last processed version per event type to avoid duplicates
 const lastVersions: Record<string, bigint> = {
   MembershipEvent: BigInt(0),
   InviteEvent: BigInt(0),
@@ -84,7 +82,6 @@ export class MultisigIndexerService {
         if(lastVersions[eventType])
         if (version <= lastVersions[eventType]) continue;
 
-        // Call the correct save method
         switch (eventType) {
           case "MembershipEvent":
             await this.saveMembership(e);
@@ -103,7 +100,6 @@ export class MultisigIndexerService {
             break;
         }
 
-        // Update last processed version
         if(lastVersions[eventType])
         if (version > lastVersions[eventType]) lastVersions[eventType] = version;
       }

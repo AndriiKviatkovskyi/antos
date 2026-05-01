@@ -32,8 +32,8 @@ export function CreateWalletPage() {
   const [monthlyLimit, setMonthlyLimit] = useState("");
   const [filterWhitelist, setFilterWhitelist] = useState(false);
 
-  const toOctasOrMinusOne = (val: string) =>
-    val === "" ? -1 : toOctas(Number(val));
+  const toOctasOrZero = (val: string) =>
+    val === "" ? 0 : toOctas(Number(val));
 
   const handleSubmit = async () => {
     if (!account) {
@@ -56,8 +56,8 @@ export function CreateWalletPage() {
             Array.from(seedBytes),
             Number(maxOwners),
             Number(walletMode),
-            walletMode === 2 ? toOctasOrMinusOne(entryFee) : 0,,
-            walletMode === 2 ? toOctasOrMinusOne(monthlyFee) : 0,
+            walletMode === 2 ? toOctasOrZero(entryFee) : 0,
+            walletMode === 2 ? toOctasOrZero(monthlyFee) : 0,
           ],
         };
       } else {
@@ -68,16 +68,16 @@ export function CreateWalletPage() {
             Array.from(seedBytes),
             Number(maxOwners),
             Number(walletMode),
-            walletMode === 2 ? toOctasOrMinusOne(entryFee) : 0,
-            walletMode === 2 ? toOctasOrMinusOne(monthlyFee) : 0,
+            walletMode === 2 ? toOctasOrZero(entryFee) : 0,
+            walletMode === 2 ? toOctasOrZero(monthlyFee) : 0,
             onlyAdminsInitiate,
             adminsCanVeto,
             Number(votingMode),
-            votingMode === 4 ? toOctasOrMinusOne(tierTwo) : 0,
-            votingMode === 4 ? toOctasOrMinusOne(tierThree) : 0,
-            toOctasOrMinusOne(dailyLimit),
-            toOctasOrMinusOne(weeklyLimit),
-            toOctasOrMinusOne(monthlyLimit),
+            votingMode === 4 ? toOctasOrZero(tierTwo) : 0,
+            votingMode === 4 ? toOctasOrZero(tierThree) : 0,
+            toOctasOrZero(dailyLimit),
+            toOctasOrZero(weeklyLimit),
+            toOctasOrZero(monthlyLimit),
             filterWhitelist,
           ],
         };

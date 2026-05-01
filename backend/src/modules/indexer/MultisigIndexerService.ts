@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const { NODE_URL, CONTRACT_ADDRESS, POLL_INTERVAL_MS = 3000 } = process.env;
+const { NODE_URL, CONTRACT_ADDRESS, POLL_INTERVAL_MS = 10000 } = process.env;
 
 const eventMapping: Record<
   string,

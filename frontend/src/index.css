@@ -33,7 +33,7 @@ html, body {
   padding: 0;
   width: 100%;
   min-height: 100vh;
-  background-color: #f8fafc; /* Matches your slate-50 background */
+  background-color: #f8fafc;
 }
 
 h1 {

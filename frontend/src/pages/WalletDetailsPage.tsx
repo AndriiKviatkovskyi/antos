@@ -204,28 +204,28 @@ export function WalletDetailsPage() {
     setShowListsModal(true);
   }
 
-  async function handleAddToList(listName: "membership"|"recipient") {
-    if (!newListAddress || !account || !address) return;
+  async function handleAddToList(listName: "membership" | "recipient", addressToAdd: string) {
+    if (!addressToAdd || !account || !address) return;
     let payload: InputEntryFunctionData;
-    if (listName==="membership") {
+    if (listName === "membership") {
       payload = {
-        function:`${MULTISIG_MODULE}::edit_membership_blacklist`,
-        typeArguments:[],
-        functionArguments:[address,newListAddress,true]
+        function: `${MULTISIG_MODULE}::edit_membership_blacklist`,
+        typeArguments: [],
+        functionArguments: [address, addressToAdd, true]
       };
       await signAndSubmitTransaction({ data: payload });
-      setMembershipBlacklist([...membershipBlacklist,newListAddress]);
+      setMembershipBlacklist([...membershipBlacklist, addressToAdd]);
     } else {
       payload = {
-        function:`${MULTISIG_MODULE}::edit_recipient_list`,
-        typeArguments:[],
-        functionArguments:[address,newListAddress,true,useWhitelist]
+        function: `${MULTISIG_MODULE}::edit_recipient_list`,
+        typeArguments: [],
+        functionArguments: [address, addressToAdd, true, useWhitelist]
       };
       await signAndSubmitTransaction({ data: payload });
-      if (useWhitelist) setRecipientWhitelist([...recipientWhitelist,newListAddress]);
-      else setRecipientBlacklist([...recipientBlacklist,newListAddress]);
+      if (useWhitelist) setRecipientWhitelist([...recipientWhitelist, addressToAdd]);
+      else setRecipientBlacklist([...recipientBlacklist, addressToAdd]);
     }
-    setNewListAddress("");
+    await fetchData();
   }
 
   async function handleSetMembershipBlacklist(newList: string[]) {
@@ -295,6 +295,7 @@ export function WalletDetailsPage() {
       if (useWhitelist) setRecipientWhitelist(recipientWhitelist.filter(a => a!==addr));
       else setRecipientBlacklist(recipientBlacklist.filter(a => a!==addr));
     }
+    await fetchData();
   }
 
   async function handleToggleRecipientMode() {
@@ -308,6 +309,7 @@ export function WalletDetailsPage() {
 
     await signAndSubmitTransaction({ data: payload });
     setUseWhitelist(!useWhitelist);
+    await fetchData();
   }
 
   async function handleFundWallet() {
@@ -939,9 +941,7 @@ export function WalletDetailsPage() {
         handleSetRecipientList={handleSetRecipientList}
         recipientWhitelist={recipientWhitelist}
         recipientBlacklist={recipientBlacklist}
-        newListAddress={newListAddress}
         setShow={setShowListsModal}
-        setNewListAddress={setNewListAddress}
         handleToggleRecipientMode={handleToggleRecipientMode}
         handleAddToList={handleAddToList}
         handleRemoveFromList={handleRemoveFromList}
@@ -1062,7 +1062,7 @@ export function WalletDetailsPage() {
         setShow={setShowProposalsModal}
         MODE_COMBINED={MODE_COMBINED}
         MODE_MAJORITY={MODE_MAJORITY}
-        currentUser={address}
+        currentUser={currentUserHex!}
         styles={s}
       />
 

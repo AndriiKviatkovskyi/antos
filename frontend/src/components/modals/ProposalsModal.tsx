@@ -175,8 +175,9 @@ export default function ProposalsModal({
           const timelockPassed = now >= proposal.earliest_execution_time;
           const notExpired = proposal.expiry_time === 0 || now <= proposal.expiry_time;
           const isPending = proposal.status === 0;
+          const hasAlreadyVoted = currentUser ? proposal.approvals.includes(currentUser) : false;
 
-          const voteDisabled = !isPending || !timelockPassed || !notExpired;
+          const voteDisabled = !isPending || !timelockPassed || !notExpired || hasAlreadyVoted;
           const canVeto = isAdmin && adminsCanVeto && walletMode !== 1 && isPending;
           const canCancel = isPending && currentUser && proposal.creator === currentUser;
           const canExecute = isPending && thresholdMet && timelockPassed && notExpired && 

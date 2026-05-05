@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface ListsModalProps {
   show: boolean;
@@ -8,13 +8,10 @@ interface ListsModalProps {
   recipientWhitelist: string[];
   recipientBlacklist: string[];
 
-  newListAddress: string;
-
   setShow: (value: boolean) => void;
-  setNewListAddress: (value: string) => void;
 
   handleToggleRecipientMode: () => void;
-  handleAddToList: (type: "membership" | "recipient") => void;
+  handleAddToList: (type: "membership" | "recipient", address: string) => void;
   handleRemoveFromList: (
     type: "membership" | "recipient",
     address: string
@@ -34,9 +31,7 @@ export default function ListsModal({
   membershipBlacklist,
   recipientWhitelist,
   recipientBlacklist,
-  newListAddress,
   setShow,
-  setNewListAddress,
   handleToggleRecipientMode,
   handleAddToList,
   handleRemoveFromList,
@@ -45,14 +40,20 @@ export default function ListsModal({
   fetchData,
   styles,
 }: ListsModalProps) {
+  const [membershipSingleInput, setMembershipSingleInput] = useState("");
+  const [recipientSingleInput, setRecipientSingleInput] = useState("");
   const [bulkMembershipInput, setBulkMembershipInput] = useState("");
   const [bulkRecipientInput, setBulkRecipientInput] = useState("");
 
+  useEffect(() => {
+    if (show) {
+      fetchData();
+    }
+  }, [show]);
+
   if (!show) return null;
 
-  const recipientList = useWhitelist
-    ? recipientWhitelist
-    : recipientBlacklist;
+  const recipientList = useWhitelist ? recipientWhitelist : recipientBlacklist;
 
   const parseAddresses = (input: string): string[] => {
     return input
@@ -64,16 +65,14 @@ export default function ListsModal({
   return (
     <div style={styles.modalOverlay}>
       <div style={styles.listsModal}>
-        <button 
-            style={styles.closeCross} 
-            onClick={() => setShow(false)}
-            aria-label="Close"
+        <button
+          style={styles.closeCross}
+          onClick={() => setShow(false)}
+          aria-label="Close"
         >
           ×
         </button>
         <h3>Lists Management</h3>
-
-        {/* ================= Recipient Mode ================= */}
 
         <div style={{ marginBottom: 16 }}>
           <label>
@@ -86,8 +85,6 @@ export default function ListsModal({
           </label>
         </div>
 
-        {/* ================= Membership Blacklist ================= */}
-
         <h4>Membership Blacklist</h4>
 
         <ul style={styles.ownersList}>
@@ -96,9 +93,7 @@ export default function ListsModal({
               {addr}
               <button
                 style={styles.secondaryButton}
-                onClick={() =>
-                  handleRemoveFromList("membership", addr)
-                }
+                onClick={() => handleRemoveFromList("membership", addr)}
               >
                 Remove
               </button>
@@ -106,22 +101,23 @@ export default function ListsModal({
           ))}
         </ul>
 
-        {/* Single add */}
         <input
           style={styles.input}
           placeholder="0x..."
-          value={newListAddress}
-          onChange={(e) => setNewListAddress(e.target.value)}
+          value={membershipSingleInput}
+          onChange={(e) => setMembershipSingleInput(e.target.value)}
         />
 
         <button
           style={styles.primaryButton}
-          onClick={() => handleAddToList("membership")}
+          onClick={() => {
+            handleAddToList("membership", membershipSingleInput);
+            setMembershipSingleInput("");
+          }}
         >
           Add to Membership Blacklist
         </button>
 
-        {/* Bulk */}
         <h5 style={{ marginTop: 16 }}>Bulk Replace</h5>
 
         <textarea
@@ -141,8 +137,6 @@ export default function ListsModal({
           Replace Entire Membership Blacklist
         </button>
 
-        {/* ================= Recipient List ================= */}
-
         <h4 style={{ marginTop: 24 }}>
           Recipient List ({useWhitelist ? "Whitelist" : "Blacklist"})
         </h4>
@@ -153,9 +147,7 @@ export default function ListsModal({
               {addr}
               <button
                 style={styles.secondaryButton}
-                onClick={() =>
-                  handleRemoveFromList("recipient", addr)
-                }
+                onClick={() => handleRemoveFromList("recipient", addr)}
               >
                 Remove
               </button>
@@ -163,15 +155,23 @@ export default function ListsModal({
           ))}
         </ul>
 
-        {/* Single add */}
+        <input
+          style={styles.input}
+          placeholder="0x..."
+          value={recipientSingleInput}
+          onChange={(e) => setRecipientSingleInput(e.target.value)}
+        />
+
         <button
           style={styles.primaryButton}
-          onClick={() => handleAddToList("recipient")}
+          onClick={() => {
+            handleAddToList("recipient", recipientSingleInput);
+            setRecipientSingleInput("");
+          }}
         >
           Add to Recipient List
         </button>
 
-        {/* Bulk */}
         <h5 style={{ marginTop: 16 }}>Bulk Replace</h5>
 
         <textarea
@@ -191,19 +191,14 @@ export default function ListsModal({
           Replace Entire Recipient List
         </button>
 
-        {/* Warning */}
         <p style={{ color: "orange", fontSize: 12, marginTop: 12 }}>
           Warning: Replacing lists may cancel pending proposals in Safe mode.
         </p>
 
-        {/* Close */}
         <div style={styles.modalButtons}>
           <button
             style={styles.secondaryButton}
-            onClick={async () => {
-              setShow(false);
-              await fetchData();
-            }}
+            onClick={() => setShow(false)}
           >
             Close
           </button>

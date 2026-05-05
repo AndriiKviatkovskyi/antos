@@ -1,3 +1,3 @@
 export const API_BASE = "http://localhost:3001/api";
 export const MULTISIG_MODULE =
-  "0x490a1c503e8246ed6c60e35856ab88eb4301ac123bdb6a5b6a43e5a18985510a::multisig";
+  "0xa17cd46db2b691ee042ae9edee94b64cf898f7e3c8534eb22992bd949f9a3a1e::multisig";

@@ -136,7 +136,16 @@ export default function ProposalsModal({
   return (
     <div style={styles.modalOverlay}>
       <div style={styles.proposalsModal}>
-        <h2>All Proposals</h2>
+        
+        <button 
+            style={styles.closeCross} 
+            onClick={() => setShow(false)}
+            aria-label="Close"
+        >
+          ×
+        </button>
+
+        <h2 style={{ marginTop: 0 }}>All Proposals</h2>
 
         {walletData.proposals?.slice().reverse().map((proposal: Proposal) => {
           const totalVoters = walletData.owners.length;

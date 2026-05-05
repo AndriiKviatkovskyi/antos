@@ -94,6 +94,15 @@ export function KickProposalsModal({
   return (
     <div style={styles.modalOverlay}>
       <div style={styles.proposalsModal}>
+
+        <button 
+            style={styles.closeCross} 
+            onClick={() => setShow(false)}
+            aria-label="Close"
+        >
+          ×
+        </button>
+
         <h2>Kick Proposals</h2>
 
         {proposals.length === 0 && <p>No active proposals</p>}

@@ -64,6 +64,13 @@ export default function ListsModal({
   return (
     <div style={styles.modalOverlay}>
       <div style={styles.listsModal}>
+        <button 
+            style={styles.closeCross} 
+            onClick={() => setShow(false)}
+            aria-label="Close"
+        >
+          ×
+        </button>
         <h3>Lists Management</h3>
 
         {/* ================= Recipient Mode ================= */}

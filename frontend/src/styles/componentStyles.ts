@@ -178,11 +178,13 @@ export const walletStyles = {
   },
 
   listsModal: {
+    position: "relative" as const,
     backgroundColor: "white",
     padding: "24px",
     borderRadius: "16px",
     width: "60%",
     maxHeight: "80vh",
+    marginTop: "6%",
     overflowY: "auto",
   } as React.CSSProperties,
 
@@ -250,13 +252,16 @@ export const walletStyles = {
   },
 
   proposalsModal: {
-  backgroundColor: "white",
-  padding: "32px",
-  borderRadius: "20px",
-  width: "85%",
-  maxHeight: "85vh",
-  overflowY: "auto",
-} as const,
+    position: "relative" as const,
+    backgroundColor: "white",
+    padding: "32px",
+    borderRadius: "20px",
+    width: "85%",
+    maxHeight: "85vh",
+    height: "70%",
+    marginTop: "5%",
+    overflowY: "auto",
+  } as const,
 
 proposalCard: {
   border: "1px solid #e2e8f0",
@@ -268,4 +273,20 @@ proposalCard: {
   gap: "24px",
   boxShadow: "0 6px 20px rgba(0,0,0,0.05)",
 },
+
+closeCross: {
+    position: "absolute" as const,
+    top: "16px",
+    right: "20px",
+    fontSize: "28px",
+    fontWeight: "bold",
+    color: "#dc2626",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    lineHeight: "1",
+    padding: "4px",
+    zIndex: 10,
+    transition: "transform 0.2s",
+  },
 };

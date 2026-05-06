@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { fetchNicknameByAddress } from "../../utils/userHelpers";
+import { calculateLimit } from "../../utils/limitCalculator";
 
 const AddressLabel = ({ 
   addr, 
@@ -53,6 +54,12 @@ interface WalletData {
   tier_three_threshold: number;
   wallet_mode: number;
   admins_can_veto: boolean;
+  recipient_whitelist: string[];
+  recipient_blacklist: string[];
+  recipient_filter_is_whitelist: boolean;
+  daily_limit: any;
+  weekly_limit: any;
+  monthly_limit: any;
 }
 
 interface ProposalsModalProps {
@@ -72,6 +79,7 @@ interface ProposalsModalProps {
   MODE_COMBINED: number;
   MODE_MAJORITY: number;
   currentUser: string | undefined;
+  balance: number | null;
   styles: any;
 }
 
@@ -92,6 +100,7 @@ export default function ProposalsModal({
   MODE_COMBINED,
   MODE_MAJORITY,
   currentUser,
+  balance,
   styles,
 }: ProposalsModalProps) {
   const [nicknames, setNicknames] = useState<Record<string, string>>({});
@@ -132,6 +141,49 @@ export default function ProposalsModal({
   };
 
   const isFinalStatus = (status: number) => status !== 0;
+
+  const daily = calculateLimit(walletData.daily_limit, 1);
+  const weekly = calculateLimit(walletData.weekly_limit, 7);
+  const monthly = calculateLimit(walletData.monthly_limit, 30);
+
+  const getSoftWarnings = (proposal: Proposal): string[] => {
+    const warnings: string[] = [];
+    const amountOctas = proposal.amount;
+
+    const whitelist = walletData.recipient_whitelist || [];
+    const blacklist = walletData.recipient_blacklist || [];
+    const whitelistEnabled = walletData.recipient_filter_is_whitelist;
+
+    if (whitelistEnabled) {
+      if (!whitelist.includes(proposal.recipient)) {
+        warnings.push("Recipient is not in the whitelist.");
+      }
+    } else {
+      if (blacklist.includes(proposal.recipient)) {
+        warnings.push("Recipient is blacklisted.");
+      }
+    }
+
+    const limits = [
+      { name: "Daily", data: daily },
+      { name: "Weekly", data: weekly },
+      { name: "Monthly", data: monthly },
+    ];
+
+    for (const limit of limits) {
+      if (limit.data?.hasLimit) {
+        if (limit.data.accumulated + amountOctas > limit.data.max) {
+          warnings.push(`${limit.name} spending limit exceeded.`);
+        }
+      }
+    }
+
+    if (balance !== null && balance !== undefined && amountOctas > balance) {
+      warnings.push("Insufficient wallet balance.");
+    }
+
+    return warnings;
+  };
 
   return (
     <div style={styles.modalOverlay}>
@@ -176,12 +228,18 @@ export default function ProposalsModal({
           const notExpired = proposal.expiry_time === 0 || now <= proposal.expiry_time;
           const isPending = proposal.status === 0;
           const hasAlreadyVoted = currentUser ? proposal.approvals.includes(currentUser) : false;
+          const isDecidingVote = approvalsCount + 1 >= requiredVotes;
 
-          const voteDisabled = !isPending || !timelockPassed || !notExpired || hasAlreadyVoted;
+          const softWarnings = getSoftWarnings(proposal);
+          const hasSoftWarnings = softWarnings.length > 0;
+
+          const voteBlockedBySoftWarning = isDecidingVote && hasSoftWarnings;
+          const voteDisabled = !isPending || !timelockPassed || !notExpired || hasAlreadyVoted || voteBlockedBySoftWarning;
+
           const canVeto = isAdmin && adminsCanVeto && walletMode !== 1 && isPending;
           const canCancel = isPending && currentUser && proposal.creator === currentUser;
           const canExecute = isPending && thresholdMet && timelockPassed && notExpired && 
-                             currentUser && proposal.creator === currentUser;
+                             currentUser && proposal.creator === currentUser && !hasSoftWarnings;
 
           return (
             <div key={proposal.id} style={styles.proposalCard}>
@@ -201,6 +259,16 @@ export default function ProposalsModal({
                 <p><b>Created:</b> {new Date(proposal.created_at * 1000).toLocaleString()}</p>
                 <p><b>Earliest Execution:</b> {new Date(proposal.earliest_execution_time * 1000).toLocaleString()}</p>
                 <p><b>Expiry:</b> {proposal.expiry_time === 0 ? "No expiry" : new Date(proposal.expiry_time * 1000).toLocaleString()}</p>
+
+                {isPending && hasSoftWarnings && (
+                  <div style={{ marginTop: 8 }}>
+                    {softWarnings.map((w, i) => (
+                      <p key={i} style={{ color: "orange", fontSize: 12, margin: "2px 0" }}>
+                        ⚠️ {w}
+                      </p>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div style={{ width: 260 }}>
@@ -233,7 +301,6 @@ export default function ProposalsModal({
                   </ul>
                 )}
 
-                {/* --- Action Buttons --- */}
                 {isPending && (
                   <button
                     style={{
@@ -249,6 +316,12 @@ export default function ProposalsModal({
                   </button>
                 )}
 
+                {isPending && voteBlockedBySoftWarning && (
+                  <p style={{ fontSize: 11, color: "orange", marginTop: 4 }}>
+                    ⚠️ Deciding vote blocked: proposal cannot be executed in current wallet configuration.
+                  </p>
+                )}
+
                 {canExecute && (
                   <button
                     style={{
@@ -262,6 +335,13 @@ export default function ProposalsModal({
                   >
                     Execute
                   </button>
+                )}
+
+                {isPending && thresholdMet && timelockPassed && notExpired &&
+                 currentUser && proposal.creator === currentUser && hasSoftWarnings && (
+                  <p style={{ fontSize: 11, color: "orange", marginTop: 4 }}>
+                    ⚠️ Execute blocked: proposal cannot be executed in current wallet configuration.
+                  </p>
                 )}
 
                 {isPending && (

@@ -1089,6 +1089,7 @@ export function WalletDetailsPage() {
       <ProposalsModal
         show={showProposalsModal}
         walletData={walletData}
+        balance={balance}
         isAdmin={isAdmin}
         expandedApprovals={expandedApprovals}
         setExpandedApprovals={setExpandedApprovals}

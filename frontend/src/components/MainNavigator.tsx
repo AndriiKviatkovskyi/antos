@@ -35,7 +35,9 @@ export function MainNavigator() {
     return (
       <div style={s.welcomeWrapper}>
         <div style={s.welcomeContainer}>
-          <div style={s.logoBox}>A logo</div>
+          <div style={s.logoBox}>
+            <img src="/antos_logo.png" alt="Antos" style={{ maxHeight: "100%", maxWidth: "100%" }} />
+          </div>
           <h1 style={s.title}>Secure your assets.</h1>
           <div style={s.walletSelectorWrapper}>
             <WalletSelector />

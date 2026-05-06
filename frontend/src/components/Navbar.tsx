@@ -39,7 +39,9 @@ export function Navbar({ address }: { address: string }) {
     <nav style={s.wrapper}>
       <div style={s.container}>
         <div style={s.leftSection}>
-          <Link to="/" style={s.logo}>LOGO</Link>
+          <Link to="/" style={s.logo}>
+            <img src="/antos_logo.png" alt="Logo" style={{ height: 32 }} />
+          </Link>
           
           <div style={s.linkGroup}>
             <Link to="/myprofile" style={getLinkStyle("/myprofile")}>

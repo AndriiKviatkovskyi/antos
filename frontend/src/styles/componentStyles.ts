@@ -7,9 +7,8 @@ export const mainStyles = {
   } as const,
   welcomeContainer: { maxWidth: '448px', width: '100%' },
   logoBox: {
-    width: '80px', height: '80px', backgroundColor: '#2563eb', borderRadius: '24px',
-    margin: '0 auto 24px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    color: 'white', fontSize: '30px', fontWeight: 900, boxShadow: '0 20px 25px -5px rgba(59, 130, 246, 0.2)'
+    width: '220px',
+    margin: '0 auto 8px', display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
   title: { fontSize: '48px', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.025em', marginBottom: '24px' },
   walletSelectorWrapper: { display: 'inline-block', padding: '8px', backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', border: '1px solid #f1f5f9' },

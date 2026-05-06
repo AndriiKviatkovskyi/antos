@@ -20,7 +20,6 @@ export function Dashboard() {
         const amount = await aptos.getAccountAPTAmount({ 
           accountAddress: AccountAddress.from(addressStr) 
         });
-        // Aptos uses 8 decimals (Octas)
         setBalance((Number(amount) / 100_000_000).toFixed(4));
       } catch (e) {
         console.error("Balance fetch error:", e);

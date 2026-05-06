@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+
 interface ProposeTransferModalProps {
   show: boolean;
 
@@ -5,7 +7,11 @@ interface ProposeTransferModalProps {
   proposalAmount: string;
   proposalTimelock: string;
   proposalExecWindow: string;
-  proposalError?: string | null;
+
+  hardError?: string | null;
+  softWarnings?: string[];
+
+  walletMode: number;
 
   setProposalRecipient: (value: string) => void;
   setProposalAmount: (value: string) => void;
@@ -14,6 +20,7 @@ interface ProposeTransferModalProps {
 
   handleProposeTransfer: () => void;
   setShow: (value: boolean) => void;
+  fetchData: () => Promise<void>;
 
   styles: any;
 }
@@ -24,16 +31,28 @@ export default function ProposeTransferModal({
   proposalAmount,
   proposalTimelock,
   proposalExecWindow,
-  proposalError,
+  hardError,
+  softWarnings = [],
+  walletMode,
   setProposalRecipient,
   setProposalAmount,
   setProposalTimelock,
   setProposalExecWindow,
   handleProposeTransfer,
   setShow,
+  fetchData,
   styles,
 }: ProposeTransferModalProps) {
+  useEffect(() => {
+    if (show) {
+      fetchData();
+    }
+  }, [show]);
+
   if (!show) return null;
+
+  const isSafeMode = walletMode === 1;
+  const isBlocked = !!hardError || (isSafeMode && softWarnings.length > 0);
 
   return (
     <div style={styles.modalOverlay}>
@@ -71,11 +90,42 @@ export default function ProposeTransferModal({
           onChange={(e) => setProposalExecWindow(e.target.value)}
         />
 
-        {proposalError && <p style={styles.errorText}>{proposalError}</p>}
+        {hardError && (
+          <p style={{ ...styles.errorText, color: "red", fontWeight: "bold" }}>
+            ⛔ {hardError}
+          </p>
+        )}
+
+        {softWarnings.length > 0 && (
+          <div>
+            {softWarnings.map((w, i) => (
+              <p
+                key={i}
+                style={{
+                  ...styles.errorText,
+                  color: isSafeMode ? "red" : "orange",
+                  fontWeight: isSafeMode ? "bold" : "normal",
+                }}
+              >
+                {isSafeMode ? "⛔" : "⚠️"} {w}
+                {!isSafeMode && (
+                  <span style={{ display: "block", fontSize: 11, marginTop: 2 }}>
+                    Proposal can still be created, but will not execute until wallet configuration is updated or state naturally changes.
+                  </span>
+                )}
+              </p>
+            ))}
+          </div>
+        )}
 
         <div style={styles.modalButtons}>
           <button
-            style={styles.primaryButton}
+            style={{
+              ...styles.primaryButton,
+              opacity: isBlocked ? 0.5 : 1,
+              cursor: isBlocked ? "not-allowed" : "pointer",
+            }}
+            disabled={isBlocked}
             onClick={handleProposeTransfer}
           >
             Propose

@@ -83,7 +83,8 @@ export function WalletDetailsPage() {
   const [proposalAmount, setProposalAmount] = useState("");
   const [proposalTimelock, setProposalTimelock] = useState("");
   const [proposalExecWindow, setProposalExecWindow] = useState("");
-  const [proposalError, setProposalError] = useState<string | null>(null);
+  const [hardError, setHardError] = useState<string | null>(null);
+  const [softWarnings, setSoftWarnings] = useState<string[]>([]);
 
   const [showProposalsModal, setShowProposalsModal] = useState(false);
   const [expandedApprovals, setExpandedApprovals] = useState<string | number | null>(null);
@@ -569,7 +570,7 @@ export function WalletDetailsPage() {
   }
 
   async function handleProposeTransfer() {
-    if (!account || !address || !proposalRecipient || !proposalAmount || proposalError) return;
+    if (!account || !address || hardError || (walletData?.wallet_mode === 1 && softWarnings.length > 0)) return;
 
     try {
       setStatus("Creating proposal...");
@@ -790,61 +791,97 @@ export function WalletDetailsPage() {
   }
 
   useEffect(() => {
-    if (!walletData) return;
-    setProposalError(null);
-    if (!proposalRecipient) return;
-
-    const whitelistEnabled = walletData.whitelist_enabled;
-    setRecipientWhitelist(walletData.recipient_whitelist || []);
-    setRecipientBlacklist(walletData.recipient_blacklist || []);
-
-    if (whitelistEnabled) {
-      if (!recipientWhitelist.includes(proposalRecipient)) {
-        setProposalError("Recipient not in whitelist.");
+    setHardError(null);
+    setSoftWarnings([]);
+  
+    const now = Date.now();
+    const nowSeconds = Math.floor(now / 1000);
+  
+    // --- HARD errors (завжди блокують) ---
+  
+    if (!proposalRecipient) {
+      setHardError("Recipient address is required.");
+      return;
+    }
+  
+    if (!proposalAmount) {
+      setHardError("Amount is required.");
+      return;
+    }
+  
+    if (proposalTimelock) {
+      const timelockMs = new Date(proposalTimelock).getTime();
+      if (timelockMs <= now) {
+        setHardError("Timelock must be in the future.");
         return;
+      }
+    }
+  
+    if (proposalExecWindow) {
+      const execMs = new Date(proposalExecWindow).getTime();
+      if (execMs <= now) {
+        setHardError("Execution deadline must be in the future.");
+        return;
+      }
+    }
+  
+    if (proposalExecWindow && proposalTimelock) {
+      const execMs = new Date(proposalExecWindow).getTime();
+      const timelockMs = new Date(proposalTimelock).getTime();
+      if (execMs <= timelockMs) {
+        setHardError("Execution deadline must be after timelock.");
+        return;
+      }
+    }
+  
+    // --- SOFT warnings (блокують тільки в safe mode) ---
+  
+    if (!walletData) return;
+  
+    const warnings: string[] = [];
+  
+    const whitelist = walletData.recipient_whitelist || [];
+    const blacklist = walletData.recipient_blacklist || [];
+    const whitelistEnabled = walletData.whitelist_enabled;
+  
+    if (whitelistEnabled) {
+      if (!whitelist.includes(proposalRecipient)) {
+        warnings.push("Recipient is not in the whitelist.");
       }
     } else {
-      if (recipientBlacklist.includes(proposalRecipient)) {
-        setProposalError("Recipient is blacklisted.");
-        return;
+      if (blacklist.includes(proposalRecipient)) {
+        warnings.push("Recipient is blacklisted.");
       }
     }
-
-    if (proposalExecWindow && proposalTimelock) {
-      const execTime = new Date(proposalExecWindow).getTime();
-      const timelockTime = new Date(proposalTimelock).getTime();
-
-      if (execTime <= timelockTime) {
-        setProposalError("Execution deadline must be after timelock.");
-        return;
-      }
-    }
-
+  
     if (proposalAmountOctas > 0) {
       const limits = [
         { name: "Daily", data: daily },
         { name: "Weekly", data: weekly },
         { name: "Monthly", data: monthly },
       ];
-
+  
       for (const limit of limits) {
         if (limit.data?.hasLimit) {
-          if (
-            limit.data.accumulated + proposalAmountOctas >
-            limit.data.max
-          ) {
-            setProposalError(`${limit.name} limit exceeded.`);
-            return;
+          if (limit.data.accumulated + proposalAmountOctas > limit.data.max) {
+            warnings.push(`${limit.name} spending limit exceeded.`);
           }
         }
       }
     }
+  
+    if (balance !== null && balance !== undefined && proposalAmountOctas > balance) {
+      warnings.push("Insufficient wallet balance.");
+    }
+  
+    setSoftWarnings(warnings);
   }, [
     proposalRecipient,
     proposalAmount,
     proposalTimelock,
     proposalExecWindow,
     walletData,
+    balance,
   ]);
 
   return (
@@ -1035,7 +1072,10 @@ export function WalletDetailsPage() {
         proposalAmount={proposalAmount}
         proposalTimelock={proposalTimelock}
         proposalExecWindow={proposalExecWindow}
-        proposalError={proposalError}
+        hardError={hardError}
+        softWarnings={softWarnings}
+        walletMode={walletData?.wallet_mode ?? 0}
+        fetchData={fetchData}
         setProposalRecipient={setProposalRecipient}
         setProposalAmount={setProposalAmount}
         setProposalTimelock={setProposalTimelock}

@@ -124,6 +124,10 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
     );
   }
 
+  const adminCount = walletData.admins?.length ?? 0;
+  const isCharityMode = walletData.wallet_mode === 2;
+  const charityAdminLimitReached = isCharityMode && adminCount >= 3;
+
   return (
     <div style={s.walletBox}>
       <div
@@ -167,7 +171,8 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
                 isAdmin &&
                 !ownerIsAdmin &&
                 !isSelf &&
-                walletData.wallet_mode !== 1;
+                walletData.wallet_mode !== 1 &&
+                !charityAdminLimitReached;
 
               return (
                 <li
@@ -182,9 +187,9 @@ export const WalletInfo: React.FC<WalletInfoProps> = ({
                   <div>
                     <span
                       onClick={() => nicknames[owner] && toggleOwnerAddress(owner)}
-                      style={{ 
+                      style={{
                         cursor: nicknames[owner] ? "pointer" : "default",
-                        textDecoration: nicknames[owner] ? "underline" : "none" 
+                        textDecoration: nicknames[owner] ? "underline" : "none",
                       }}
                     >
                       {renderOwnerLabel(owner)}

@@ -30,7 +30,6 @@ export function MainNavigator() {
     if (account) checkProfile();
   }, [connected, account]);
 
-  // SCREEN 1: DISCONNECTED
   if (!connected) {
     return (
       <div style={s.welcomeWrapper}>
@@ -38,7 +37,7 @@ export function MainNavigator() {
           <div style={s.logoBox}>
             <img src="/antos_logo.png" alt="Antos" style={{ maxHeight: "100%", maxWidth: "100%" }} />
           </div>
-          <h1 style={s.title}>Secure your assets.</h1>
+          <h1 style={s.titleSmall}>Secure your assets, make collective decisions, configure spending </h1>
           <div style={s.walletSelectorWrapper}>
             <WalletSelector />
           </div>
@@ -47,17 +46,14 @@ export function MainNavigator() {
     );
   }
 
-  // SCREEN 2: LOADING
   if (profileStatus === "loading") {
     return <div style={s.loadingText}>Syncing Profile...</div>;
   }
 
-  // SCREEN 3: ONBOARDING
   if (profileStatus === "no_profile") {
     return <Onboarding onComplete={() => setProfileStatus("exists")} />;
   }
 
-  // SCREEN 4: AUTHENTICATED LAYOUT
   return (
     <div style={s.pageWrapper}>
       <Navbar address={account?.address.toString() || ""} />

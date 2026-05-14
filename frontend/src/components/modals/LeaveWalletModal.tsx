@@ -2,7 +2,7 @@ interface LeaveWalletModalProps {
   show: boolean;
   setShow: (value: boolean) => void;
   handleSelfRemove: () => void;
-  styles: any; // replace with proper type if available
+  styles: any;
 }
 
 export default function LeaveWalletModal({

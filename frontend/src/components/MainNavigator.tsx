@@ -4,7 +4,7 @@ import { Outlet } from "react-router-dom";
 import { Onboarding } from "./Onboarding";
 import { Navbar } from "./Navbar";
 import { WalletSelector } from "@aptos-labs/wallet-adapter-ant-design";
-import { mainStyles as s } from "../styles/componentStyles"; // Importing styles
+import { mainStyles as s } from "../styles/componentStyles";
 import { API_BASE } from "../constants";
 
 export function MainNavigator() {

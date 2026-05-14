@@ -7,7 +7,7 @@ interface FundModalProps {
 
   handleFundWallet: () => void;
 
-  styles: any; // replace with proper type if available
+  styles: any;
 }
 
 export default function FundModal({

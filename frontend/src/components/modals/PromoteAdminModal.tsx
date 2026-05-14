@@ -32,7 +32,7 @@ export default function PromoteAdminModal({
           <button
             style={{
               ...styles.primaryButton,
-              backgroundColor: "#16a34a", // зелений
+              backgroundColor: "#16a34a",
             }}
             onClick={handlePromote}
           >

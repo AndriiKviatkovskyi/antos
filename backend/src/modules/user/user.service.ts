@@ -48,7 +48,6 @@ export class UserService {
 
       if (!isValid) throw new Error("Invalid signature");
 
-      // Save all fields to DB
       return await prisma.user.create({
         data: {
           address: addressStr,
@@ -65,7 +64,7 @@ export class UserService {
   }
 
   static async update(address: string, data: { nickname?: string, bio?: string, pfp?: string }) {
-    // Filter out undefined values to avoid overwriting with null accidentally
+
     const updateData = Object.fromEntries(
       Object.entries(data).filter(([_, value]) => value !== undefined)
     );

@@ -11,7 +11,7 @@ interface InviteModalProps {
 
   handleInvite: () => void;
 
-  styles: any; // or your exact type if you have one
+  styles: any;
 }
 
 export default function InviteModal({

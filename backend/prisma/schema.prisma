@@ -15,7 +15,7 @@ datasource db {
 }
 
 model User {
-  address   String   @id // The Aptos Address
+  address   String   @id
   nickname  String   @unique
   bio       String?
   pfp       String?
@@ -26,9 +26,9 @@ model InitializeEvent {
   id            String   @id @default(uuid())
   walletAddress String
   walletName    String
-  action        String   // "INITIALIZED" or "INITIALIZED_CHARITY"
+  action        String
   admin         String
-  version       BigInt   @unique // Blockchain block/transaction version to prevent duplicates
+  version       BigInt   @unique
   timestamp     DateTime @default(now())
 }
 
@@ -36,7 +36,7 @@ model MembershipEvent {
   id            String   @id @default(uuid())
   walletAddress String
   walletName    String
-  action        String   // "JOINED" or "REMOVED"
+  action        String 
   member        String
   actor         String
   version       BigInt   @unique
@@ -47,7 +47,7 @@ model InviteEvent {
   id            String   @id @default(uuid())
   walletAddress String
   walletName    String
-  action        String   // "SENT", "ACCEPTED", "REJECTED"
+  action        String
   invitee       String
   actor         String
   version       BigInt   @unique
@@ -58,7 +58,7 @@ model ProposalEvent {
   id            String   @id @default(uuid())
   walletAddress String
   proposalId    BigInt
-  action        String   // "CREATED", "APPROVED", "EXECUTED", "VETOED"
+  action        String
   actor         String
   version       BigInt   @unique
   timestamp     DateTime @default(now())
@@ -67,7 +67,7 @@ model ProposalEvent {
 model GovernanceEvent {
   id            String   @id @default(uuid())
   walletAddress String
-  action        String   // "LIMIT_UPDATE", "CONFIG_UPDATE", etc.
+  action        String
   actor         String
   version       BigInt   @unique
   timestamp     DateTime @default(now())

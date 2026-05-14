@@ -124,6 +124,7 @@ module multisig_addr::multisig {
         last_payment_timestamp: u64,
     }
 
+    /// Main state resource for a multisig instance
     struct MultisigStore has key {
         name: vector<u8>,
         owners: vector<address>,
@@ -153,6 +154,7 @@ module multisig_addr::multisig {
         next_kick_proposal_id: u64
     }
 
+    /// Details for a fund transfer request
     struct Proposal has store, copy, drop {
         id: u64,
         creator: address,
@@ -165,6 +167,7 @@ module multisig_addr::multisig {
         expiry_time: u64,
     }
 
+    /// Details for a member removal request
     struct KickProposal has store, copy, drop {
         id: u64,
         initiator: address,
@@ -174,6 +177,7 @@ module multisig_addr::multisig {
         active: bool,
     }
 
+    /// Initializes module-wide event streams
     fun init_module(admin: &signer) {
         move_to(admin, ModuleEvents {
             membership_events: account::new_event_handle<MembershipEvent>(admin),
@@ -185,7 +189,8 @@ module multisig_addr::multisig {
     }
 
     /// --- Initialization ---
-
+    
+    /// Simple initialization
     public entry fun initialize(admin: &signer, seed: vector<u8>, max_owners: u64, wallet_mode: u8, entry_fee: u64, monthly_fee: u64) acquires ModuleEvents {
         assert!(
             wallet_mode == MODE_FLEXIBLE ||
@@ -256,6 +261,7 @@ module multisig_addr::multisig {
         });
     }
 
+    /// Customized initialization
     public entry fun initialize_custom(
         admin: &signer, 
         seed: vector<u8>, 
@@ -329,7 +335,6 @@ module multisig_addr::multisig {
 
         let events = borrow_global_mut<ModuleEvents>(@multisig_addr);
 
-        // Emit Initialize Event
         event::emit_event(&mut events.initialize_events, InitializeEvent {
             wallet_address: wallet_addr,
             wallet_name: seed,
@@ -343,7 +348,6 @@ module multisig_addr::multisig {
             admin: admin_addr,
         });
 
-        // Emit Joined Event for the Admin
         event::emit_event(&mut events.membership_events, MembershipEvent {
             wallet_address: wallet_addr,
             wallet_name: seed,
@@ -520,7 +524,6 @@ module multisig_addr::multisig {
                 actor: caller_addr
             });
 
-            // Emit Joined Membership
             event::emit_event(&mut events.membership_events, MembershipEvent {
                 wallet_address: multisig_address,
                 wallet_name: store.name,
@@ -529,7 +532,6 @@ module multisig_addr::multisig {
                 actor: caller_addr
             });
         } else {
-            // Emit Invite Rejected
             event::emit_event(&mut events.invite_events, InviteEvent {
                 wallet_address: multisig_address,
                 wallet_name: store.name,
@@ -1158,83 +1160,8 @@ module multisig_addr::multisig {
     }
 
     #[test_only]
-    use aptos_framework::account::create_account_for_test;
-
-    #[test(admin = @multisig_addr, user = @0x456)]
-    public entry fun test_multisig_proposal_flow(
-        admin: &signer,
-        user: &signer
-    ) acquires MultisigStore, ModuleEvents {
-
-        let admin_addr = signer::address_of(admin);
-        let user_addr = signer::address_of(user);
-
-        // --- Setup accounts ---
-        create_account_for_test(admin_addr);
-        create_account_for_test(user_addr);
-        create_account_for_test(@0x1);
-
-        aptos_framework::timestamp::set_time_has_started_for_testing(
-            &create_account_for_test(@0x1)
-        );
-
-        // --- Init global events ---
+    public fun init_module_for_test(admin: &signer) {
         init_module(admin);
-
-        // --- Initialize wallet (FLEXIBLE mode) ---
-        let seed = b"test_wallet";
-        initialize(admin, copy seed, 5, MODE_FLEXIBLE, 0, 0);
-
-        let multisig_addr = account::create_resource_address(&admin_addr, seed);
-
-        // --- Invite second owner ---
-        invite_owner(admin, multisig_addr, user_addr, false);
-        respond_to_invitation(user, multisig_addr, true);
-
-        // --- Mint coins to admin and fund wallet ---
-        let (burn_cap, mint_cap) =
-            aptos_framework::aptos_coin::initialize_for_test(&create_account_for_test(@0x1));
-
-        coin::register<AptosCoin>(admin);
-        coin::register<AptosCoin>(user);
-
-        let coins = coin::mint<AptosCoin>(1000, &mint_cap);
-        coin::deposit(admin_addr, coins);
-
-        fund_voluntarily(admin, multisig_addr, 500);
-
-        // --- Create proposal (majority = 2/2 owners) ---
-        propose_transfer(
-            admin,
-            multisig_addr,
-            user_addr,
-            100,
-            0,  // no timelock
-            0   // no expiry
-        );
-
-        // proposal_id should be 0
-        let proposal_id = 0;
-
-        // --- Approve by admin ---
-        approve(admin, multisig_addr, proposal_id);
-
-        // --- Approve by user (should EXECUTE here automatically) ---
-        approve(user, multisig_addr, proposal_id);
-
-        // --- Check proposal status ---
-        let store = borrow_global<MultisigStore>(multisig_addr);
-
-        let proposal_ref = vector::borrow(&store.proposals, 0);
-
-        assert!(proposal_ref.status == STATUS_EXECUTED, 1001);
-
-        // --- Check recipient received funds ---
-        let balance = coin::balance<AptosCoin>(user_addr);
-        assert!(balance >= 100, 1002);
-
-        // Cleanup caps
-        aptos_framework::coin::destroy_burn_cap(burn_cap);
-        aptos_framework::coin::destroy_mint_cap(mint_cap);
     }
+
 }
